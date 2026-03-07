@@ -1,0 +1,7 @@
+# PostgreSQL
+# ------------------------------------------------------------------------------
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_DB=hutech_program
+POSTGRES_USER=QKkqXpwVtTHZxRfCPEBwbZmtYrdySHaE
+POSTGRES_PASSWORD=wcAWpnau4kfGWAkRJjKH5bX2sgHQk0QSJE8ahnJTHaz5j9vCYR5AGsmsqdI0Xebz

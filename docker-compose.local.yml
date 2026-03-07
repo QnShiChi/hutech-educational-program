@@ -1,0 +1,94 @@
+volumes:
+  hutech_program_local_postgres_data: {}
+  hutech_program_local_postgres_data_backups: {}
+  hutech_program_local_redis_data: {}
+
+services:
+  django: &django
+    build:
+      context: .
+      dockerfile: ./compose/local/django/Dockerfile
+    image: hutech_program_local_django
+    container_name: hutech_program_local_django
+    depends_on:
+      - postgres
+      - redis
+      - mailpit
+    volumes:
+      - /app/.venv
+      - .:/app:z
+    env_file:
+      - ./.envs/.local/.django
+      - ./.envs/.local/.postgres
+    ports:
+      - '8000:8000'
+    command: /start
+
+  postgres:
+    build:
+      context: .
+      dockerfile: ./compose/production/postgres/Dockerfile
+    image: hutech_program_production_postgres
+    container_name: hutech_program_local_postgres
+    volumes:
+      - hutech_program_local_postgres_data:/var/lib/postgresql/data
+      - hutech_program_local_postgres_data_backups:/backups
+    env_file:
+      - ./.envs/.local/.postgres
+    ports:
+      - '5432:5432'
+
+  mailpit:
+    image: docker.io/axllent/mailpit:latest
+    container_name: hutech_program_local_mailpit
+    ports:
+      - "8025:8025"
+
+  redis:
+    image: docker.io/redis:7.2
+    container_name: hutech_program_local_redis
+    volumes:
+      - hutech_program_local_redis_data:/data
+
+  celeryworker:
+    <<: *django
+    image: hutech_program_local_celeryworker
+    container_name: hutech_program_local_celeryworker
+    depends_on:
+      - redis
+      - postgres
+      - mailpit
+    ports: []
+    command: /start-celeryworker
+
+  celerybeat:
+    <<: *django
+    image: hutech_program_local_celerybeat
+    container_name: hutech_program_local_celerybeat
+    depends_on:
+      - redis
+      - postgres
+      - mailpit
+    ports: []
+    command: /start-celerybeat
+
+  flower:
+    <<: *django
+    image: hutech_program_local_flower
+    container_name: hutech_program_local_flower
+    ports:
+      - '5555:5555'
+    command: /start-flower
+
+  frontend:
+    build:
+      context: .
+      dockerfile: ./compose/local/frontend/Dockerfile
+    image: hutech_program_local_frontend
+    container_name: hutech_program_local_frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - '5173:5173'
+    command: npm run dev -- --host 0.0.0.0
