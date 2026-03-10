@@ -340,7 +340,7 @@ class CourseViewSet(AuditLogMixin, viewsets.ModelViewSet):
     """CRUD for master Courses."""
 
     queryset = Course.objects.select_related(
-        "managing_department", "course_group"
+        "managing_department"
     ).prefetch_related("program_courses")
     permission_classes = [IsAuthenticated, HasModulePermission]
     permission_map = {
@@ -353,7 +353,7 @@ class CourseViewSet(AuditLogMixin, viewsets.ModelViewSet):
         "programs": "courses.view",
     }
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ["managing_department", "course_group", "is_active"]
+    filterset_fields = ["managing_department", "is_active"]
     search_fields = ["code", "name_vi", "name_en"]
     ordering_fields = ["code", "total_credits", "created_at"]
 

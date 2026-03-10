@@ -76,7 +76,6 @@ class TestCourseCRUD:
             "project_credits": 0,
             "internship_credits": 0,
             "managing_department": str(dept.id),
-            "course_group": str(group.id),
         }
         resp = client.post("/api/v1/programs/courses/", data, format="json")
         assert resp.status_code == status.HTTP_201_CREATED
@@ -446,7 +445,14 @@ class TestCourseChangeNotification:
 class TestCourseGroupCRUD:
     def test_create_course_group(self):
         client, _ = _auth_client()
-        data = {"name": "Kỹ thuật", "description": "Nhóm kỹ thuật"}
+        kb = KnowledgeBlockFactory()
+        data = {
+            "name": "Kỹ thuật", 
+            "description": "Nhóm kỹ thuật", 
+            "knowledge_block": str(kb.id),
+            "total_credits": 10,
+            "elective_credits": 5
+        }
         resp = client.post("/api/v1/programs/course-groups/", data, format="json")
         assert resp.status_code == status.HTTP_201_CREATED
 
@@ -455,3 +461,37 @@ class TestCourseGroupCRUD:
         client, _ = _auth_client()
         resp = client.get("/api/v1/programs/course-groups/")
         assert resp.status_code == status.HTTP_200_OK
+
+class TestProgramCourseValidation:
+    """Task 5.1 & 5.2: ProgramCourse validation and CourseGroup ops."""
+
+    def test_course_group_must_belong_to_knowledge_block(self):
+        program = TrainingProgramFactory(status=ProgramStatus.DRAFT)
+        course = CourseFactory()
+        kb1 = KnowledgeBlockFactory(program=program)
+        kb2 = KnowledgeBlockFactory(program=program)
+        cg = CourseGroupFactory(knowledge_block=kb2)
+
+        pc = ProgramCourse(
+            program=program,
+            course=course,
+            knowledge_block=kb1,
+            course_group=cg,
+        )
+        with pytest.raises(ValidationError):
+            pc.clean()
+
+    def test_course_group_matches_knowledge_block(self):
+        program = TrainingProgramFactory(status=ProgramStatus.DRAFT)
+        course = CourseFactory()
+        kb = KnowledgeBlockFactory(program=program)
+        cg = CourseGroupFactory(knowledge_block=kb)
+
+        pc = ProgramCourse(
+            program=program,
+            course=course,
+            knowledge_block=kb,
+            course_group=cg,
+        )
+        # Should not raise
+        pc.clean()

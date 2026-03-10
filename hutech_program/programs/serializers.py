@@ -278,16 +278,13 @@ class ReorderSerializer(serializers.Serializer):
 class CourseGroupSerializer(serializers.ModelSerializer):
     class Meta:
         model = CourseGroup
-        fields = ["id", "name", "description"]
+        fields = ["id", "knowledge_block", "name", "description", "total_credits", "elective_credits"]
         read_only_fields = ["id"]
 
 
 class CourseListSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(
         source="managing_department.name", read_only=True
-    )
-    course_group_name = serializers.CharField(
-        source="course_group.name", read_only=True, default=None
     )
     program_count = serializers.IntegerField(
         source="program_courses.count", read_only=True
@@ -307,8 +304,6 @@ class CourseListSerializer(serializers.ModelSerializer):
             "internship_credits",
             "managing_department",
             "department_name",
-            "course_group",
-            "course_group_name",
             "is_active",
             "program_count",
         ]
@@ -317,9 +312,6 @@ class CourseListSerializer(serializers.ModelSerializer):
 class CourseDetailSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(
         source="managing_department.name", read_only=True
-    )
-    course_group_name = serializers.CharField(
-        source="course_group.name", read_only=True, default=None
     )
 
     class Meta:
@@ -340,8 +332,6 @@ class CourseDetailSerializer(serializers.ModelSerializer):
             "managing_department",
             "department_name",
             "description",
-            "course_group",
-            "course_group_name",
             "is_active",
             "created_at",
             "updated_at",
@@ -365,7 +355,6 @@ class CourseCreateUpdateSerializer(serializers.ModelSerializer):
             "practice_hours",
             "managing_department",
             "description",
-            "course_group",
             "is_active",
         ]
 
@@ -440,6 +429,9 @@ class ProgramCourseSerializer(serializers.ModelSerializer):
     knowledge_block_name = serializers.CharField(
         source="knowledge_block.name", read_only=True, default=None
     )
+    course_group_name = serializers.CharField(
+        source="course_group.name", read_only=True, default=None
+    )
     prerequisites = CoursePrerequisiteSerializer(many=True, read_only=True)
 
     class Meta:
@@ -452,6 +444,8 @@ class ProgramCourseSerializer(serializers.ModelSerializer):
             "total_credits",
             "knowledge_block",
             "knowledge_block_name",
+            "course_group",
+            "course_group_name",
             "order_number",
             "is_required",
             "semester",

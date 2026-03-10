@@ -3,16 +3,16 @@ Programs URL routing with nested resources.
 """
 
 from django.urls import include, path
-from rest_framework.routers import DefaultRouter
+from rest_framework.routers import DefaultRouter, SimpleRouter
 
 from . import views
 from hutech_program.workflows.urls import workflow_nested
 
-router = DefaultRouter()
+router = SimpleRouter()
 router.register("", views.TrainingProgramViewSet, basename="program")
 
 # Course management (top-level)
-course_router = DefaultRouter()
+course_router = SimpleRouter()
 course_router.register("courses", views.CourseViewSet, basename="course")
 course_router.register("course-groups", views.CourseGroupViewSet, basename="course-group")
 

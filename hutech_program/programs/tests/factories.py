@@ -101,6 +101,9 @@ class CourseGroupFactory(DjangoModelFactory):
 
     name = factory.Sequence(lambda n: f"Nhóm HP {n}")
     description = factory.Faker("sentence")
+    knowledge_block = factory.SubFactory(KnowledgeBlockFactory)
+    total_credits = 10
+    elective_credits = 5
 
 
 class CourseFactory(DjangoModelFactory):
@@ -116,7 +119,6 @@ class CourseFactory(DjangoModelFactory):
     project_credits = 0
     internship_credits = 0
     managing_department = factory.SubFactory(DepartmentFactory)
-    course_group = factory.SubFactory(CourseGroupFactory)
 
 
 class ProgramCourseFactory(DjangoModelFactory):

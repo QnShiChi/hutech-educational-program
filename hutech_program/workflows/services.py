@@ -2,20 +2,22 @@
 Business services for approval workflow, versioning, and notifications.
 """
 
+from django.conf import settings
 from django.db import transaction
+from django.db.models import QuerySet
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from hutech_program.notifications.models import Notification
 from hutech_program.programs.models import ProgramStatus, TrainingProgram
-from hutech_program.rbac.models import UserRole
+from hutech_program.rbac.models import AuditAction, AuditLog, UserRole
 
 from .models import (
     ApprovalStep,
     ApprovalWorkflow,
-    ProgramVersion,
+    EntityType,
+    EntityVersion,
     StepStatus,
-    TRAINING_PROGRAM_STEPS,
     WorkflowStatus,
 )
 
@@ -24,269 +26,462 @@ from .models import (
 
 
 class WorkflowService:
-    """State machine logic for multi-level approval."""
+    """
+    Core service handling all workflow state transitions.
+    All public methods are wrapped in database transactions.
+    """
 
-    # Valid transitions: from_status → [to_statuses]
-    STATUS_MAP = {
-        1: {
-            "reviewing": ProgramStatus.KHOA_REVIEWING,
-            "approved": ProgramStatus.KHOA_APPROVED,
+    # Workflow step configurations per entity type
+    WORKFLOW_CONFIGS = {
+        EntityType.TRAINING_PROGRAM: [
+            {"step": 1, "name": "Xét duyệt cấp Khoa/Viện", "role": "LANH_DAO_KHOA", "dept_scope": True},
+            {"step": 2, "name": "Xét duyệt Phòng Đào tạo", "role": "PHONG_DAO_TAO", "dept_scope": False},
+            {"step": 3, "name": "Phê duyệt Ban Giám Hiệu", "role": "BAN_GIAM_HIEU", "dept_scope": False},
+        ],
+        EntityType.PLO: [
+            {"step": 1, "name": "Xét duyệt cấp Khoa/Viện", "role": "LANH_DAO_KHOA", "dept_scope": True},
+            {"step": 2, "name": "Xét duyệt Phòng Đào tạo", "role": "PHONG_DAO_TAO", "dept_scope": False},
+            {"step": 3, "name": "Phê duyệt Ban Giám Hiệu", "role": "BAN_GIAM_HIEU", "dept_scope": False},
+        ],
+        EntityType.SYLLABUS: [
+            {"step": 1, "name": "Trưởng bộ môn kiểm tra", "role": "TRUONG_NGANH", "dept_scope": True},
+            {"step": 2, "name": "Trưởng Khoa/Viện xét duyệt", "role": "LANH_DAO_KHOA", "dept_scope": True},
+            {"step": 3, "name": "Phòng Đào tạo xét duyệt", "role": "PHONG_DAO_TAO", "dept_scope": False},
+            {"step": 4, "name": "Ban Giám Hiệu phê duyệt", "role": "BAN_GIAM_HIEU", "dept_scope": False},
+        ],
+    }
+
+    # Entity status mapping: step_number → entity status while that step is IN_REVIEW
+    STATUS_MAPS = {
+        EntityType.TRAINING_PROGRAM: {
+            1: "KHOA_REVIEWING",
+            2: "PDT_REVIEWING",
+            3: "BGH_REVIEWING",
         },
-        2: {
-            "reviewing": ProgramStatus.PDT_REVIEWING,
-            "approved": ProgramStatus.PDT_APPROVED,
+        EntityType.PLO: {
+            1: "KHOA_REVIEWING",
+            2: "PDT_REVIEWING",
+            3: "BGH_REVIEWING",
         },
-        3: {
-            "reviewing": ProgramStatus.BGH_REVIEWING,
-            "approved": ProgramStatus.PUBLISHED,
+        EntityType.SYLLABUS: {
+            1: "TBM_REVIEWING",
+            2: "TK_REVIEWING",
+            3: "PDT_REVIEWING",
+            4: "BGH_REVIEWING",
         },
     }
 
     @classmethod
     @transaction.atomic
-    def submit(cls, program, user):
-        """Submit program for approval. Creates workflow + 3 steps."""
-        if program.status not in (ProgramStatus.DRAFT, ProgramStatus.REVISION_REQUIRED):
+    def submit(cls, entity, entity_type: str, user) -> ApprovalWorkflow:
+        """
+        Submit entity for approval. Creates workflow + all steps.
+        Validates: entity status, no active workflow, user permission.
+        """
+        # Validate entity status
+        if entity.status not in (ProgramStatus.DRAFT, ProgramStatus.REVISION_REQUIRED):
             raise ValidationError(
-                {"status": f"Không thể nộp duyệt khi trạng thái là {program.get_status_display()}."}
+                {"status": "Chỉ có thể nộp duyệt từ trạng thái Bản nháp hoặc Cần chỉnh sửa"}
             )
 
-        # Prevent concurrent submissions
+        # Validate no active workflow
         existing = ApprovalWorkflow.objects.filter(
-            entity_type="TrainingProgram",
-            entity_id=program.id,
-            status__in=[WorkflowStatus.PENDING, WorkflowStatus.IN_PROGRESS],
+            entity_type=entity_type,
+            entity_id=entity.id,
+            status=WorkflowStatus.IN_PROGRESS,
         ).exists()
         if existing:
             raise ValidationError(
-                {"workflow": "CTĐT này đang trong quy trình phê duyệt."}
+                {"workflow": "Tài liệu đang trong quy trình phê duyệt"}
+            )
+
+        # Get workflow config for entity type
+        steps_config = cls.WORKFLOW_CONFIGS.get(entity_type)
+        if not steps_config:
+            raise ValidationError(
+                {"entity_type": f"Không hỗ trợ quy trình phê duyệt cho loại: {entity_type}"}
             )
 
         # Create workflow
         workflow = ApprovalWorkflow.objects.create(
-            entity_type="TrainingProgram",
-            entity_id=program.id,
-            current_step=1,
+            entity_type=entity_type,
+            entity_id=entity.id,
+            current_step_number=1,
+            total_steps=len(steps_config),
             status=WorkflowStatus.IN_PROGRESS,
             initiated_by=user,
         )
 
-        # Create 3 approval steps
+        # Create approval steps
         from hutech_program.rbac.models import Role
 
-        for step_def in TRAINING_PROGRAM_STEPS:
-            role = Role.objects.filter(code=step_def["approver_role_code"]).first()
+        for step_def in steps_config:
+            role = Role.objects.filter(code=step_def["role"]).first()
             if not role:
                 raise ValidationError(
-                    {"role": f"Không tìm thấy vai trò {step_def['approver_role_code']}."}
+                    {"role": f"Không tìm thấy vai trò {step_def['role']}"}
                 )
             ApprovalStep.objects.create(
                 workflow=workflow,
-                step_number=step_def["step_number"],
-                step_name=step_def["step_name"],
-                approver_role=role,
+                step_number=step_def["step"],
+                step_name=step_def["name"],
+                required_role=role,
+                required_department_scope=step_def.get("dept_scope", True),
+                status=StepStatus.IN_REVIEW if step_def["step"] == 1 else StepStatus.PENDING,
             )
 
-        # Update program status
-        program.status = ProgramStatus.SUBMITTED
-        program.save(update_fields=["status", "updated_at"])
-
-        # Auto-advance to KHOA_REVIEWING
-        program.status = ProgramStatus.KHOA_REVIEWING
-        program.save(update_fields=["status", "updated_at"])
+        # Update entity status
+        status_map = cls.STATUS_MAPS.get(entity_type, {})
+        new_status = status_map.get(1, "KHOA_REVIEWING")
+        entity.status = new_status
+        entity.save(update_fields=["status", "updated_at"])
 
         # Notify approvers for step 1
-        NotificationService.notify_approvers(
-            workflow=workflow,
-            step_number=1,
-            program=program,
+        first_step = workflow.steps.filter(step_number=1).first()
+        if first_step:
+            NotificationService.notify_step_approvers(first_step, entity)
+
+        # Audit log
+        cls._create_audit_log(
+            user=user,
+            action=AuditAction.SUBMIT,
+            entity_type=entity_type,
+            entity_id=entity.id,
+            new_data={"status": new_status, "workflow_id": str(workflow.id)},
         )
 
         return workflow
 
     @classmethod
     @transaction.atomic
-    def approve(cls, program, user, comment=""):
-        """Approve current step and advance workflow."""
-        workflow = cls._get_active_workflow(program)
-        step = cls._get_current_step(workflow)
-
-        cls._validate_approver_role(user, step)
-
-        # Mark step as approved
-        step.status = StepStatus.APPROVED
-        step.approver = user
-        step.comment = comment
-        step.acted_at = timezone.now()
-        step.save()
-
-        # Advance to next step or complete
-        next_step_number = step.step_number + 1
-        status_map = cls.STATUS_MAP.get(step.step_number, {})
-
-        if next_step_number <= len(TRAINING_PROGRAM_STEPS):
-            # Advance — update program to approved status for this level, then reviewing for next
-            workflow.current_step = next_step_number
-            workflow.save(update_fields=["current_step", "updated_at"])
-
-            program.status = status_map.get("approved", program.status)
-            program.save(update_fields=["status", "updated_at"])
-
-            # Auto-advance to next reviewing status
-            next_status_map = cls.STATUS_MAP.get(next_step_number, {})
-            reviewing_status = next_status_map.get("reviewing")
-            if reviewing_status:
-                program.status = reviewing_status
-                program.save(update_fields=["status", "updated_at"])
-
-            # Notify next approvers + creator
-            NotificationService.notify_approvers(
-                workflow=workflow,
-                step_number=next_step_number,
-                program=program,
+    def approve(cls, workflow: ApprovalWorkflow, user, comment: str = "") -> ApprovalStep:
+        """
+        Approve current step. If final, complete workflow + create version.
+        Uses optimistic locking.
+        """
+        step = workflow.current_step
+        if not step or step.status != StepStatus.IN_REVIEW:
+            raise ValidationError(
+                {"step": "Không tìm thấy bước phê duyệt đang chờ xử lý"}
             )
-            NotificationService.notify_creator(
-                workflow=workflow,
-                program=program,
-                action="approved",
-                step=step,
+
+        entity = workflow.get_entity()
+        if not entity:
+            raise ValidationError({"entity": "Không tìm thấy đối tượng"})
+
+        # Validate approver
+        cls._validate_approver(step, user, entity)
+
+        # Optimistic locking: read current version and filter update
+        rows_updated = ApprovalStep.objects.filter(
+            id=step.id,
+            version=step.version,
+        ).update(
+            status=StepStatus.APPROVED,
+            acted_by=user,
+            acted_at=timezone.now(),
+            action_comment=comment,
+            version=step.version + 1,
+            updated_at=timezone.now(),
+        )
+        if rows_updated == 0:
+            raise ValidationError(
+                {"conflict": "Bước này đã được xử lý bởi người khác. Vui lòng tải lại trang."}
+            )
+
+        # Refresh step from DB
+        step.refresh_from_db()
+
+        if not workflow.is_final_step:
+            # Advance to next step
+            cls._advance_to_next_step(workflow)
+
+            # Notify next approvers
+            next_step = workflow.current_step
+            if next_step:
+                NotificationService.notify_step_approvers(next_step, entity)
+
+            # Notify initiator
+            NotificationService.notify_initiator(
+                workflow,
+                f"Đã duyệt: {entity}",
+                f"{entity} đã được duyệt ở bước: {step.step_name}.",
             )
         else:
-            # Final approval — PUBLISHED
-            workflow.status = WorkflowStatus.APPROVED
-            workflow.save(update_fields=["status", "updated_at"])
+            # Final approval
+            cls._complete_workflow(workflow, user)
 
-            program.status = ProgramStatus.PUBLISHED
-            program.save(update_fields=["status", "updated_at"])
-
-            # Create version snapshot
-            VersionService.create_snapshot(program, user)
-
-            # Notify creator
-            NotificationService.notify_creator(
-                workflow=workflow,
-                program=program,
-                action="published",
-                step=step,
+            # Notify initiator
+            NotificationService.notify_initiator(
+                workflow,
+                f"Đã công bố: {entity}",
+                f"{entity} đã được phê duyệt và công bố!",
             )
 
-        return workflow
+            # Notify department users
+            if hasattr(entity, "managing_department") and entity.managing_department:
+                NotificationService.notify_department_users(
+                    department=entity.managing_department,
+                    title=f"CTĐT đã được công bố",
+                    message=f"{entity} đã được công bố phiên bản {getattr(entity, 'version', 1)}.",
+                    link=f"/programs/{entity.id}",
+                )
+
+        # Audit log
+        cls._create_audit_log(
+            user=user,
+            action=AuditAction.APPROVE,
+            entity_type=workflow.entity_type,
+            entity_id=workflow.entity_id,
+            new_data={
+                "step_number": step.step_number,
+                "step_name": step.step_name,
+                "comment": comment,
+            },
+        )
+
+        return step
 
     @classmethod
     @transaction.atomic
-    def reject(cls, program, user, comment):
-        """Reject at current step. Comment is required."""
-        if not comment.strip():
-            raise ValidationError({"comment": "Phải có nhận xét khi từ chối."})
+    def reject(cls, workflow: ApprovalWorkflow, user, comment: str) -> ApprovalStep:
+        """Reject current step. Comment is required."""
+        if not comment or not comment.strip():
+            raise ValidationError(
+                {"comment": "Vui lòng nhập lý do từ chối"}
+            )
+        if len(comment.strip()) < 10:
+            raise ValidationError(
+                {"comment": "Lý do từ chối phải có ít nhất 10 ký tự"}
+            )
 
-        workflow = cls._get_active_workflow(program)
-        step = cls._get_current_step(workflow)
+        step = workflow.current_step
+        if not step or step.status != StepStatus.IN_REVIEW:
+            raise ValidationError(
+                {"step": "Không tìm thấy bước phê duyệt đang chờ xử lý"}
+            )
 
-        cls._validate_approver_role(user, step)
+        entity = workflow.get_entity()
+        if not entity:
+            raise ValidationError({"entity": "Không tìm thấy đối tượng"})
+
+        # Validate approver
+        cls._validate_approver(step, user, entity)
 
         # Mark step as rejected
         step.status = StepStatus.REJECTED
-        step.approver = user
-        step.comment = comment
+        step.acted_by = user
         step.acted_at = timezone.now()
+        step.action_comment = comment
         step.save()
 
-        # Reset workflow
+        # Set workflow to rejected
         workflow.status = WorkflowStatus.REJECTED
         workflow.save(update_fields=["status", "updated_at"])
 
-        # Reset program status
-        program.status = ProgramStatus.REVISION_REQUIRED
-        program.save(update_fields=["status", "updated_at"])
+        # Set entity to revision required
+        entity.status = ProgramStatus.REVISION_REQUIRED
+        entity.save(update_fields=["status", "updated_at"])
 
-        # Notify creator
-        NotificationService.notify_creator(
-            workflow=workflow,
-            program=program,
-            action="rejected",
-            step=step,
+        # Notify initiator
+        NotificationService.notify_initiator(
+            workflow,
+            f"Bị từ chối: {entity}",
+            f"{entity} bị từ chối ở bước: {step.step_name}. Nhận xét: {comment}",
         )
 
-        return workflow
+        # Audit log
+        cls._create_audit_log(
+            user=user,
+            action=AuditAction.REJECT,
+            entity_type=workflow.entity_type,
+            entity_id=workflow.entity_id,
+            new_data={
+                "step_number": step.step_number,
+                "step_name": step.step_name,
+                "comment": comment,
+            },
+        )
+
+        return step
 
     @classmethod
-    def _get_active_workflow(cls, program):
+    def _validate_approver(cls, step: ApprovalStep, user, entity) -> None:
+        """Check user has correct role + department for this step."""
+        if user.is_superuser:
+            return
+
+        user_roles = UserRole.objects.filter(
+            user=user,
+            role=step.required_role,
+        )
+
+        if step.required_department_scope:
+            # Need to match entity's department
+            dept = getattr(entity, "managing_department", None)
+            if dept:
+                user_roles = user_roles.filter(department=dept)
+
+        if not user_roles.exists():
+            raise PermissionDenied(
+                "Bạn không có quyền phê duyệt ở bước này"
+            )
+
+    @classmethod
+    def _advance_to_next_step(cls, workflow: ApprovalWorkflow) -> None:
+        """Set next step to IN_REVIEW, update workflow and entity."""
+        next_number = workflow.current_step_number + 1
+        next_step = workflow.steps.filter(step_number=next_number).first()
+        if next_step:
+            next_step.status = StepStatus.IN_REVIEW
+            next_step.save(update_fields=["status", "updated_at"])
+
+        workflow.current_step_number = next_number
+        workflow.save(update_fields=["current_step_number", "updated_at"])
+
+        # Update entity status
+        entity = workflow.get_entity()
+        if entity:
+            status_map = cls.STATUS_MAPS.get(workflow.entity_type, {})
+            new_status = status_map.get(next_number)
+            if new_status:
+                entity.status = new_status
+                entity.save(update_fields=["status", "updated_at"])
+
+    @classmethod
+    def _complete_workflow(cls, workflow: ApprovalWorkflow, user) -> EntityVersion:
+        """Set entity PUBLISHED, create version snapshot."""
+        workflow.status = WorkflowStatus.COMPLETED
+        workflow.completed_at = timezone.now()
+        workflow.save(update_fields=["status", "completed_at", "updated_at"])
+
+        entity = workflow.get_entity()
+        if entity:
+            entity.status = ProgramStatus.PUBLISHED
+            if hasattr(entity, "version"):
+                entity.version = (entity.version or 0) + 1
+            entity.save()
+
+            # Create version snapshot
+            return VersionService.create_snapshot(
+                entity=entity,
+                entity_type=workflow.entity_type,
+                user=user,
+                workflow=workflow,
+            )
+        return None
+
+    @classmethod
+    def _get_notifiable_users(cls, step: ApprovalStep, entity) -> QuerySet:
+        """Find all users with the required role (+ department if scoped)."""
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+
+        user_roles = UserRole.objects.filter(role=step.required_role)
+
+        if step.required_department_scope:
+            dept = getattr(entity, "managing_department", None)
+            if dept:
+                user_roles = user_roles.filter(department=dept)
+
+        user_ids = user_roles.values_list("user_id", flat=True)
+        return User.objects.filter(id__in=user_ids)
+
+    @classmethod
+    def _get_active_workflow_for_entity(cls, entity_type, entity_id):
+        """Get the active IN_PROGRESS workflow for an entity."""
         workflow = ApprovalWorkflow.objects.filter(
-            entity_type="TrainingProgram",
-            entity_id=program.id,
+            entity_type=entity_type,
+            entity_id=entity_id,
             status=WorkflowStatus.IN_PROGRESS,
         ).first()
         if not workflow:
             raise ValidationError(
-                {"workflow": "Không tìm thấy quy trình phê duyệt đang hoạt động."}
+                {"workflow": "Không tìm thấy quy trình phê duyệt đang hoạt động"}
             )
         return workflow
 
     @classmethod
-    def _get_current_step(cls, workflow):
-        step = workflow.steps.filter(step_number=workflow.current_step).first()
-        if not step:
-            raise ValidationError({"step": "Không tìm thấy bước phê duyệt hiện tại."})
-        return step
-
-    @classmethod
-    def _validate_approver_role(cls, user, step):
-        """Check that user has the required role for this step."""
-        has_role = UserRole.objects.filter(
+    def _create_audit_log(cls, user, action, entity_type, entity_id, old_data=None, new_data=None):
+        """Create audit log entry."""
+        AuditLog.objects.create(
             user=user,
-            role=step.approver_role,
-        ).exists()
-        if not has_role and not user.is_superuser:
-            raise ValidationError(
-                {"permission": f"Bạn không có quyền {step.step_name}."}
-            )
+            action=action,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            old_data=old_data,
+            new_data=new_data,
+        )
 
 
 # ────────────────────────── Version Service ──────────────────────────
 
 
 class VersionService:
-    """Manages program version snapshots."""
+    """Manages entity version snapshots, comparison, and rollback."""
 
     @classmethod
-    def create_snapshot(cls, program, approved_by):
-        """Create a full JSONB snapshot of the program and all nested data."""
-        # Determine next version number
-        last_version = ProgramVersion.objects.filter(
-            program=program
+    def create_snapshot(cls, entity, entity_type: str, user, workflow=None) -> EntityVersion:
+        """Create a full JSONB snapshot of the entity and all nested data."""
+        last_version = EntityVersion.objects.filter(
+            entity_type=entity_type,
+            entity_id=entity.id,
         ).order_by("-version_number").first()
         next_number = (last_version.version_number + 1) if last_version else 1
 
-        snapshot = cls._serialize_program(program)
+        snapshot = cls._serialize_training_program(entity)
 
-        return ProgramVersion.objects.create(
-            program=program,
+        return EntityVersion.objects.create(
+            entity_type=entity_type,
+            entity_id=entity.id,
             version_number=next_number,
             snapshot_data=snapshot,
-            approved_by=approved_by,
+            created_by=user,
+            workflow=workflow,
         )
 
     @classmethod
-    def compare(cls, version1, version2):
-        """Compare two version snapshots and return diff."""
-        diff = {}
-        data1 = version1.snapshot_data
-        data2 = version2.snapshot_data
+    def compare_versions(cls, entity_type, entity_id, v1: int, v2: int) -> dict:
+        """Deep diff two version snapshots. Returns structured changes."""
+        version1 = EntityVersion.objects.filter(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            version_number=v1,
+        ).first()
+        version2 = EntityVersion.objects.filter(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            version_number=v2,
+        ).first()
 
-        all_keys = set(list(data1.keys()) + list(data2.keys()))
-        for key in sorted(all_keys):
-            v1 = data1.get(key)
-            v2 = data2.get(key)
-            if v1 != v2:
-                diff[key] = {"old": v1, "new": v2}
+        if not version1 or not version2:
+            raise ValidationError({"versions": "Không tìm thấy phiên bản"})
 
-        return diff
+        return cls._deep_diff(version1.snapshot_data, version2.snapshot_data)
 
     @classmethod
     @transaction.atomic
-    def rollback(cls, program, version, user):
-        """Restore program from a version snapshot."""
-        data = version.snapshot_data
+    def rollback(cls, entity_type, entity_id, target_version: int, user) -> EntityVersion:
+        """Restore entity from snapshot. Creates new version recording rollback."""
+        target = EntityVersion.objects.filter(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            version_number=target_version,
+        ).first()
+        if not target:
+            raise ValidationError({"version": "Không tìm thấy phiên bản"})
+
+        # Get entity
+        if entity_type == EntityType.TRAINING_PROGRAM:
+            entity = TrainingProgram.objects.filter(id=entity_id).first()
+        else:
+            raise ValidationError({"entity_type": "Chưa hỗ trợ rollback cho loại này"})
+
+        if not entity:
+            raise ValidationError({"entity": "Không tìm thấy đối tượng"})
+
+        data = target.snapshot_data
 
         # Restore basic fields
         basic_fields = [
@@ -300,17 +495,53 @@ class VersionService:
         ]
         for field in basic_fields:
             if field in data:
-                setattr(program, field, data[field])
+                setattr(entity, field, data[field])
 
-        program.status = ProgramStatus.DRAFT
-        program.last_modified_by = user
-        program.save()
+        entity.status = ProgramStatus.DRAFT
+        entity.last_modified_by = user
+        entity.save()
 
-        return program
+        # Cancel any active workflow
+        ApprovalWorkflow.objects.filter(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            status=WorkflowStatus.IN_PROGRESS,
+        ).update(status=WorkflowStatus.CANCELLED)
+
+        # Get current version number
+        current = EntityVersion.objects.filter(
+            entity_type=entity_type,
+            entity_id=entity_id,
+        ).order_by("-version_number").first()
+        current_ver = current.version_number if current else 0
+
+        # Create new version recording the rollback
+        new_version = EntityVersion.objects.create(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            version_number=current_ver + 1,
+            snapshot_data=data,
+            change_summary=f"Rollback từ phiên bản {current_ver} về phiên bản {target_version}",
+            created_by=user,
+        )
+
+        # Audit log
+        AuditLog.objects.create(
+            user=user,
+            action=AuditAction.ROLLBACK,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            new_data={
+                "rollback_from": current_ver,
+                "rollback_to": target_version,
+            },
+        )
+
+        return new_version
 
     @classmethod
-    def _serialize_program(cls, program):
-        """Serialize entire program with all related data."""
+    def _serialize_training_program(cls, program) -> dict:
+        """Full serialization including POs, PLOs, PIs, courses, matrices, plans."""
         data = {
             "program_code": program.program_code,
             "program_name_vi": program.program_name_vi,
@@ -337,7 +568,7 @@ class VersionService:
             program.objectives.values("code", "description", "order_index")
         )
 
-        # PLOs
+        # PLOs with PIs and PO mappings
         plos = []
         for plo in program.plos.prefetch_related("performance_indicators", "objectives"):
             plo_data = {
@@ -399,6 +630,68 @@ class VersionService:
 
         return data
 
+    @classmethod
+    def _deep_diff(cls, old: dict, new: dict) -> dict:
+        """Recursive JSON diff. Returns structured changes per section."""
+        changes = {}
+
+        # Handle list sections (PLOs, courses, etc.) separately
+        list_sections = {"plos", "objectives", "knowledge_blocks", "program_courses",
+                         "semester_plans", "assessment_plans"}
+
+        all_keys = set(list(old.keys()) + list(new.keys()))
+
+        for key in sorted(all_keys):
+            v_old = old.get(key)
+            v_new = new.get(key)
+
+            if v_old == v_new:
+                continue
+
+            if key in list_sections and isinstance(v_old, list) and isinstance(v_new, list):
+                # Array diff: match by 'code' or 'course_code' field
+                match_key = "code" if key in {"plos", "objectives"} else "course_code"
+                changes[key] = cls._diff_list(v_old, v_new, match_key)
+            else:
+                changes[key] = {"old": v_old, "new": v_new}
+
+        return changes
+
+    @classmethod
+    def _diff_list(cls, old_list: list, new_list: list, match_key: str) -> dict:
+        """Diff two lists of dicts, matching items by a key field."""
+        old_map = {}
+        for item in old_list:
+            if isinstance(item, dict) and match_key in item:
+                old_map[item[match_key]] = item
+
+        new_map = {}
+        for item in new_list:
+            if isinstance(item, dict) and match_key in item:
+                new_map[item[match_key]] = item
+
+        added = [v for k, v in new_map.items() if k not in old_map]
+        removed = [v for k, v in old_map.items() if k not in new_map]
+
+        modified = []
+        for key in old_map:
+            if key in new_map and old_map[key] != new_map[key]:
+                item_changes = {}
+                for field in set(list(old_map[key].keys()) + list(new_map[key].keys())):
+                    if old_map[key].get(field) != new_map[key].get(field):
+                        item_changes[field] = {
+                            "old": old_map[key].get(field),
+                            "new": new_map[key].get(field),
+                        }
+                if item_changes:
+                    item_changes[match_key] = key
+                    modified.append(item_changes)
+
+        return {"added": added, "removed": removed, "modified": modified}
+
+    # Keep backward compatibility alias
+    _serialize_program = _serialize_training_program
+
 
 # ────────────────────────── Notification Service ──────────────────────────
 
@@ -407,8 +700,9 @@ class NotificationService:
     """Creates notifications for workflow events."""
 
     @classmethod
-    def notify(cls, users, title, message, link=""):
-        """Send notification to multiple users."""
+    def notify_users(cls, users, title: str, message: str,
+                     link: str = "", category: str = "WORKFLOW"):
+        """Bulk create Notification records."""
         notifications = []
         for user in users:
             notifications.append(
@@ -417,58 +711,101 @@ class NotificationService:
                     title=title,
                     message=message,
                     link=link,
+                    category=category,
                 )
             )
         return Notification.objects.bulk_create(notifications)
 
     @classmethod
-    def notify_approvers(cls, workflow, step_number, program):
-        """Notify users with the approver role for the given step."""
-        step = workflow.steps.filter(step_number=step_number).first()
-        if not step:
-            return
-
-        # Find users with this role
-        approver_users = UserRole.objects.filter(
-            role=step.approver_role,
-        ).values_list("user", flat=True)
-
+    def notify_step_approvers(cls, step: ApprovalStep, entity):
+        """Find users with step.required_role and department, then notify."""
         from django.contrib.auth import get_user_model
+
         User = get_user_model()
-        users = User.objects.filter(id__in=approver_users)
+
+        user_roles = UserRole.objects.filter(role=step.required_role)
+
+        if step.required_department_scope:
+            dept = getattr(entity, "managing_department", None)
+            if dept:
+                user_roles = user_roles.filter(department=dept)
+
+        user_ids = user_roles.values_list("user_id", flat=True)
+        users = User.objects.filter(id__in=user_ids)
+
+        # Exclude the current workflow initiator from approver notifications
+        # (they don't need to approve their own submission)
 
         if users.exists():
-            cls.notify(
+            entity_name = str(entity)
+            cls.notify_users(
                 users=users,
-                title=f"Yêu cầu phê duyệt: {program.program_code}",
+                title=f"Yêu cầu phê duyệt: {entity_name}",
                 message=(
-                    f"CTĐT \"{program.program_name_vi}\" cần được {step.step_name}. "
-                    f"Người nộp: {workflow.initiated_by.name}."
+                    f"{entity_name} cần được {step.step_name}. "
+                    f"Người nộp: {step.workflow.initiated_by.name}."
                 ),
-                link=f"/programs/{program.id}",
+                link=f"/programs/{entity.id}?tab=workflow",
             )
 
     @classmethod
-    def notify_creator(cls, workflow, program, action, step):
-        """Notify the creator about workflow progress."""
-        action_messages = {
-            "approved": f"CTĐT \"{program.program_name_vi}\" đã được duyệt ở bước: {step.step_name}.",
-            "rejected": (
-                f"CTĐT \"{program.program_name_vi}\" bị từ chối ở bước: {step.step_name}. "
-                f"Nhận xét: {step.comment}"
-            ),
-            "published": f"CTĐT \"{program.program_name_vi}\" đã được phê duyệt và công bố!",
-        }
-
-        action_titles = {
-            "approved": f"Đã duyệt: {program.program_code}",
-            "rejected": f"Bị từ chối: {program.program_code}",
-            "published": f"Đã công bố: {program.program_code}",
-        }
-
-        cls.notify(
+    def notify_initiator(cls, workflow: ApprovalWorkflow, title: str, message: str):
+        """Notify the person who started the workflow."""
+        cls.notify_users(
             users=[workflow.initiated_by],
-            title=action_titles.get(action, f"Cập nhật: {program.program_code}"),
-            message=action_messages.get(action, ""),
-            link=f"/programs/{program.id}",
+            title=title,
+            message=message,
+            link=f"/programs/{workflow.entity_id}?tab=workflow",
+        )
+
+    @classmethod
+    def notify_department_users(cls, department, title: str, message: str, link: str = ""):
+        """Notify all users in entity's department."""
+        from django.contrib.auth import get_user_model
+
+        User = get_user_model()
+
+        user_ids = UserRole.objects.filter(
+            department=department,
+        ).values_list("user_id", flat=True).distinct()
+
+        users = User.objects.filter(id__in=user_ids)
+        if users.exists():
+            cls.notify_users(
+                users=users,
+                title=title,
+                message=message,
+                link=link,
+            )
+
+    # Legacy compatibility aliases
+    @classmethod
+    def notify(cls, users, title, message, link=""):
+        return cls.notify_users(users, title, message, link)
+
+    @classmethod
+    def notify_approvers(cls, workflow, step_number, program):
+        step = workflow.steps.filter(step_number=step_number).first()
+        if step:
+            cls.notify_step_approvers(step, program)
+
+    @classmethod
+    def notify_creator(cls, workflow, program, action, step):
+        action_messages = {
+            "approved": f"{program} đã được duyệt ở bước: {step.step_name}.",
+            "rejected": (
+                f"{program} bị từ chối ở bước: {step.step_name}. "
+                f"Nhận xét: {step.action_comment}"
+            ),
+            "published": f"{program} đã được phê duyệt và công bố!",
+        }
+        action_titles = {
+            "approved": f"Đã duyệt: {program}",
+            "rejected": f"Bị từ chối: {program}",
+            "published": f"Đã công bố: {program}",
+        }
+        cls.notify_initiator(
+            workflow,
+            action_titles.get(action, f"Cập nhật: {program}"),
+            action_messages.get(action, ""),
         )

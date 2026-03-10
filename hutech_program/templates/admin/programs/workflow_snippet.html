@@ -1,0 +1,56 @@
+{% if active_program %}
+<div
+  style="
+    background: #e1f5fe;
+    border: 1px solid #81d4fa;
+    padding: 10px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+  "
+>
+  <strong>Active Training Program Context:</strong>
+  <a
+    href="{% url 'admin:programs_trainingprogram_change' active_program.id %}"
+    style="font-weight: bold; color: #0277bd"
+    >{{ active_program.program_code }} - {{ active_program.program_name_vi }}</a
+  >
+  <span
+    style="margin-left: 10px; padding: 3px 8px; border-radius: 3px; font-size: 11px; background-color: {% if active_program.can_edit %}#c8e6c9; color: #2e7d32;{% else %}#ffccbc; color: #d84315;{% endif %}"
+  >
+    Status: {{ active_program.get_status_display }} {% if active_program.can_edit %}(Editable){% else %}(Locked){% endif %}
+  </span>
+  <div style="margin-top: 10px">
+    <span style="font-size: 12px; color: #555">Manage Tasks:</span>
+    <a
+      href="{% url 'admin:programs_programobjective_changelist' %}"
+      class="button"
+      style="margin-right: 5px"
+      >POs</a
+    >
+    <a
+      href="{% url 'admin:programs_programlearningoutcome_changelist' %}"
+      class="button"
+      style="margin-right: 5px"
+      >PLOs</a
+    >
+    <a
+      href="{% url 'admin:programs_performanceindicator_changelist' %}"
+      class="button"
+      style="margin-right: 5px"
+      >PIs</a
+    >
+    <a
+      href="{% url 'admin:programs_programcourse_changelist' %}"
+      class="button"
+      style="margin-right: 5px"
+      >Courses</a
+    >
+    <a
+      href="{% url 'admin:programs_semesterplan_changelist' %}"
+      class="button"
+      style="margin-right: 5px"
+      >Semester Plan</a
+    >
+  </div>
+</div>
+{% endif %}

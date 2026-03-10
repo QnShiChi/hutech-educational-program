@@ -33,9 +33,20 @@ class Notification(BaseModel):
         blank=True,
         verbose_name=_("Liên kết"),
     )
+    category = models.CharField(
+        max_length=30,
+        default="WORKFLOW",
+        verbose_name=_("Loại thông báo"),
+        help_text=_("WORKFLOW, COURSE_CHANGE, SYSTEM, REMINDER"),
+    )
     is_read = models.BooleanField(
         default=False,
         verbose_name=_("Đã đọc"),
+    )
+    read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Thời gian đọc"),
     )
 
     class Meta:
@@ -43,8 +54,8 @@ class Notification(BaseModel):
         verbose_name_plural = _("Thông báo")
         ordering = ["-created_at"]
         indexes = [
+            models.Index(fields=["user", "is_read", "-created_at"]),
             models.Index(fields=["user", "-created_at"]),
-            models.Index(fields=["user", "is_read"]),
         ]
 
     def __str__(self) -> str:

@@ -18,7 +18,7 @@ class User(AbstractUser):
         editable=False,
     )
     # Cookiecutter default: dùng name thay cho first_name/last_name
-    name = models.CharField(_("Name of User"), blank=True, max_length=255)
+    name = models.CharField(_("Tên người dùng"), blank=True, max_length=255)
     first_name = None  # type: ignore[assignment]
     last_name = None  # type: ignore[assignment]
 
@@ -45,8 +45,8 @@ class User(AbstractUser):
     )
 
     class Meta:
-        verbose_name = _("user")
-        verbose_name_plural = _("users")
+        verbose_name = _("Người dùng")
+        verbose_name_plural = _("Người dùng")
 
     def get_absolute_url(self) -> str:
         """Get URL for user's detail view."""

@@ -158,6 +158,27 @@ class TrainingProgram(BaseModel):
     def is_editable(self) -> bool:
         return self.status in (ProgramStatus.DRAFT, ProgramStatus.REVISION_REQUIRED)
 
+    @property
+    def can_edit(self) -> bool:
+        """True only if status allows editing (DRAFT or REVISION_REQUIRED)."""
+        return self.status in (ProgramStatus.DRAFT, ProgramStatus.REVISION_REQUIRED)
+
+    @property
+    def can_submit(self) -> bool:
+        """True if DRAFT or REVISION_REQUIRED."""
+        return self.status in (ProgramStatus.DRAFT, ProgramStatus.REVISION_REQUIRED)
+
+    @property
+    def active_workflow(self):
+        """Returns current IN_PROGRESS workflow or None."""
+        from hutech_program.workflows.models import ApprovalWorkflow, WorkflowStatus
+
+        return ApprovalWorkflow.objects.filter(
+            entity_type="TrainingProgram",
+            entity_id=self.id,
+            status=WorkflowStatus.IN_PROGRESS,
+        ).first()
+
 
 class ProgramObjective(BaseModel):
     """Mục tiêu đào tạo (PO)."""
@@ -323,12 +344,27 @@ class KnowledgeBlock(BaseModel):
 
 
 class CourseGroup(BaseModel):
-    """Nhóm học phần (Kỹ thuật, Kinh tế, ...)."""
+    """Nhóm học phần cục bộ trong Khối kiến thức."""
 
+    knowledge_block = models.ForeignKey(
+        KnowledgeBlock,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="course_groups",
+        verbose_name=_("Khối kiến thức"),
+    )
     name = models.CharField(
-        max_length=100, unique=True, verbose_name=_("Tên nhóm")
+        max_length=200, verbose_name=_("Tên nhóm")
     )
     description = models.TextField(blank=True, verbose_name=_("Mô tả"))
+    
+    total_credits = models.PositiveIntegerField(
+        default=0, verbose_name=_("Tổng tín chỉ")
+    )
+    elective_credits = models.PositiveIntegerField(
+        default=0, verbose_name=_("Tín chỉ tự chọn")
+    )
 
     class Meta:
         verbose_name = _("Nhóm học phần")
@@ -391,14 +427,6 @@ class Course(BaseModel):
     description = models.TextField(
         blank=True, verbose_name=_("Mô tả tóm tắt")
     )
-    course_group = models.ForeignKey(
-        CourseGroup,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="courses",
-        verbose_name=_("Nhóm học phần"),
-    )
     is_active = models.BooleanField(
         default=True, verbose_name=_("Đang sử dụng")
     )
@@ -459,6 +487,14 @@ class ProgramCourse(BaseModel):
         related_name="program_courses",
         verbose_name=_("Khối kiến thức"),
     )
+    course_group = models.ForeignKey(
+        CourseGroup,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="program_courses",
+        verbose_name=_("Nhóm học phần"),
+    )
     order_number = models.CharField(
         max_length=10, blank=True, verbose_name=_("Số thứ tự"),
         help_text=_("VD: I.01, II.03"),
@@ -488,6 +524,16 @@ class ProgramCourse(BaseModel):
 
     def __str__(self) -> str:
         return f"{self.program.program_code} / {self.course.code}"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.course_group and self.course_group.knowledge_block_id != self.knowledge_block_id:
+            raise ValidationError(
+                {
+                    "course_group": _("Nhóm học phần phải thuộc Khối kiến thức mà học phần được gán.")
+                }
+            )
 
 
 class PrerequisiteType(models.TextChoices):

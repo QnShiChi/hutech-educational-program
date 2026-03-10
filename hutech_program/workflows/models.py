@@ -1,5 +1,6 @@
 """
-Approval Workflow models: ApprovalWorkflow, ApprovalStep, ProgramVersion.
+Approval Workflow models: ApprovalWorkflow, ApprovalStep, ApprovalComment,
+EntityVersion, plus enums.
 Implements multi-level approval: Khoa → Phòng ĐT → BGH.
 """
 
@@ -16,25 +17,24 @@ from hutech_program.common import BaseModel, UUIDModel
 
 
 class WorkflowStatus(models.TextChoices):
-    PENDING = "PENDING", _("Đang chờ")
-    IN_PROGRESS = "IN_PROGRESS", _("Đang xét duyệt")
-    APPROVED = "APPROVED", _("Đã duyệt")
+    IN_PROGRESS = "IN_PROGRESS", _("Đang xử lý")
+    COMPLETED = "COMPLETED", _("Hoàn thành")
     REJECTED = "REJECTED", _("Bị từ chối")
+    CANCELLED = "CANCELLED", _("Đã hủy")
 
 
 class StepStatus(models.TextChoices):
-    PENDING = "PENDING", _("Chờ xử lý")
+    PENDING = "PENDING", _("Chờ đến lượt")
+    IN_REVIEW = "IN_REVIEW", _("Đang xét duyệt")
     APPROVED = "APPROVED", _("Đã duyệt")
-    REJECTED = "REJECTED", _("Bị từ chối")
+    REJECTED = "REJECTED", _("Từ chối")
     SKIPPED = "SKIPPED", _("Bỏ qua")
 
 
-# Step definitions for training program approval
-TRAINING_PROGRAM_STEPS = [
-    {"step_number": 1, "step_name": "Xét duyệt cấp Khoa", "approver_role_code": "LANH_DAO_KHOA"},
-    {"step_number": 2, "step_name": "Xét duyệt Phòng Đào tạo", "approver_role_code": "PHONG_DAO_TAO"},
-    {"step_number": 3, "step_name": "Xét duyệt Ban Giám hiệu", "approver_role_code": "BAN_GIAM_HIEU"},
-]
+class EntityType(models.TextChoices):
+    TRAINING_PROGRAM = "TrainingProgram", _("Chương trình đào tạo")
+    PLO = "ProgramLearningOutcome", _("Chuẩn đầu ra")
+    SYLLABUS = "Syllabus", _("Đề cương chi tiết")
 
 
 # ────────────────────────── Models ──────────────────────────
@@ -42,31 +42,44 @@ TRAINING_PROGRAM_STEPS = [
 
 class ApprovalWorkflow(BaseModel):
     """
-    Quy trình phê duyệt.
-    Tracking toàn bộ workflow từ submit → approval/rejection.
+    Quy trình phê duyệt gắn với 1 entity (CTĐT, PLO, hoặc Đề cương).
+    Mỗi entity có thể có nhiều workflows (nếu bị reject rồi submit lại).
+    Chỉ 1 workflow active tại 1 thời điểm.
     """
 
     entity_type = models.CharField(
         max_length=50,
+        choices=EntityType.choices,
         verbose_name=_("Loại đối tượng"),
-        help_text=_("VD: TrainingProgram"),
     )
-    entity_id = models.UUIDField(verbose_name=_("ID đối tượng"))
-    current_step = models.PositiveIntegerField(
-        default=0,
-        verbose_name=_("Bước hiện tại"),
+    entity_id = models.UUIDField(
+        db_index=True,
+        verbose_name=_("ID đối tượng"),
     )
     status = models.CharField(
         max_length=20,
         choices=WorkflowStatus.choices,
-        default=WorkflowStatus.PENDING,
+        default=WorkflowStatus.IN_PROGRESS,
         verbose_name=_("Trạng thái"),
+    )
+    current_step_number = models.PositiveIntegerField(
+        default=1,
+        verbose_name=_("Bước hiện tại"),
+    )
+    total_steps = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Tổng số bước"),
     )
     initiated_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="initiated_workflows",
         verbose_name=_("Người khởi tạo"),
+    )
+    completed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Thời gian hoàn thành"),
     )
 
     class Meta:
@@ -76,7 +89,35 @@ class ApprovalWorkflow(BaseModel):
         indexes = [
             models.Index(fields=["entity_type", "entity_id"]),
             models.Index(fields=["status"]),
+            models.Index(fields=["initiated_by", "-created_at"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["entity_type", "entity_id"],
+                condition=models.Q(status="IN_PROGRESS"),
+                name="unique_active_workflow_per_entity",
+            )
+        ]
+
+    @property
+    def current_step(self):
+        return self.steps.filter(step_number=self.current_step_number).first()
+
+    @property
+    def is_final_step(self):
+        return self.current_step_number == self.total_steps
+
+    def get_entity(self):
+        """Resolve the actual entity object."""
+        from hutech_program.programs.models import TrainingProgram
+
+        model_map = {
+            EntityType.TRAINING_PROGRAM: TrainingProgram,
+        }
+        model_class = model_map.get(self.entity_type)
+        if model_class:
+            return model_class.objects.filter(id=self.entity_id).first()
+        return None
 
     def __str__(self) -> str:
         return f"Workflow {self.entity_type}:{self.entity_id} ({self.status})"
@@ -84,7 +125,8 @@ class ApprovalWorkflow(BaseModel):
 
 class ApprovalStep(BaseModel):
     """
-    Từng bước phê duyệt trong workflow.
+    Một bước trong quy trình phê duyệt.
+    Mỗi workflow có N steps (3 cho CTĐT/PLO, 4 cho Đề cương).
     """
 
     workflow = models.ForeignKey(
@@ -95,24 +137,24 @@ class ApprovalStep(BaseModel):
     )
     step_number = models.PositiveIntegerField(
         verbose_name=_("Số bước"),
-        help_text=_("1=Khoa, 2=Phòng ĐT, 3=BGH"),
     )
     step_name = models.CharField(
         max_length=100,
         verbose_name=_("Tên bước"),
     )
-    approver_role = models.ForeignKey(
+    required_role = models.ForeignKey(
         "rbac.Role",
         on_delete=models.PROTECT,
-        verbose_name=_("Vai trò duyệt"),
+        verbose_name=_("Vai trò cần có"),
+        help_text=_("Vai trò cần có để duyệt bước này"),
     )
-    approver = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="approval_steps",
-        verbose_name=_("Người duyệt"),
+    required_department_scope = models.BooleanField(
+        default=True,
+        verbose_name=_("Phạm vi đơn vị"),
+        help_text=_(
+            "True = phải cùng department với entity. "
+            "False = cross-department (PDT, BGH)"
+        ),
     )
     status = models.CharField(
         max_length=20,
@@ -120,14 +162,27 @@ class ApprovalStep(BaseModel):
         default=StepStatus.PENDING,
         verbose_name=_("Trạng thái"),
     )
-    comment = models.TextField(
+    acted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
-        verbose_name=_("Nhận xét"),
+        related_name="approval_actions",
+        verbose_name=_("Người thực hiện"),
     )
     acted_at = models.DateTimeField(
         null=True,
         blank=True,
         verbose_name=_("Thời gian xử lý"),
+    )
+    action_comment = models.TextField(
+        blank=True,
+        verbose_name=_("Nhận xét"),
+    )
+    # Optimistic locking
+    version = models.PositiveIntegerField(
+        default=1,
+        verbose_name=_("Phiên bản (locking)"),
     )
 
     class Meta:
@@ -135,66 +190,104 @@ class ApprovalStep(BaseModel):
         verbose_name_plural = _("Bước phê duyệt")
         ordering = ["step_number"]
         unique_together = ["workflow", "step_number"]
+        indexes = [
+            models.Index(fields=["status", "required_role"]),
+        ]
 
     def __str__(self) -> str:
         return f"Step {self.step_number}: {self.step_name} ({self.status})"
 
 
-class ProgramVersion(BaseModel):
+class ApprovalComment(BaseModel):
     """
-    Version snapshot of a TrainingProgram at approval time.
-    Stores full JSONB data for comparison and rollback.
+    Comment thread trên từng bước duyệt.
+    Cho phép trao đổi giữa người duyệt và người nộp mà không cần reject.
     """
 
-    program = models.ForeignKey(
-        "programs.TrainingProgram",
+    step = models.ForeignKey(
+        ApprovalStep,
         on_delete=models.CASCADE,
-        related_name="versions",
-        verbose_name=_("Chương trình"),
+        related_name="comments",
+        verbose_name=_("Bước"),
     )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        verbose_name=_("Tác giả"),
+    )
+    content = models.TextField(verbose_name=_("Nội dung"))
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="replies",
+        verbose_name=_("Phản hồi cho"),
+    )
+
+    class Meta:
+        verbose_name = _("Bình luận phê duyệt")
+        verbose_name_plural = _("Bình luận phê duyệt")
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"Comment by {self.author} on step {self.step.step_number}"
+
+
+class EntityVersion(BaseModel):
+    """
+    Snapshot toàn bộ dữ liệu entity tại thời điểm phê duyệt cuối.
+    Sử dụng JSONB cho PostgreSQL.
+    """
+
+    entity_type = models.CharField(
+        max_length=50,
+        choices=EntityType.choices,
+        verbose_name=_("Loại đối tượng"),
+    )
+    entity_id = models.UUIDField(verbose_name=_("ID đối tượng"))
     version_number = models.PositiveIntegerField(
         verbose_name=_("Số phiên bản"),
     )
     snapshot_data = models.JSONField(
         default=dict,
         verbose_name=_("Dữ liệu snapshot"),
-        help_text=_("Full CTĐT data at approval time"),
+        help_text=_("Full serialized entity data at approval time"),
     )
     change_summary = models.TextField(
         blank=True,
         verbose_name=_("Tóm tắt thay đổi"),
     )
-    approved_by = models.ForeignKey(
+    created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name="approved_versions",
-        verbose_name=_("Người duyệt"),
+        verbose_name=_("Người tạo"),
+    )
+    workflow = models.ForeignKey(
+        ApprovalWorkflow,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resulting_versions",
+        verbose_name=_("Quy trình tạo phiên bản"),
     )
 
     class Meta:
-        verbose_name = _("Phiên bản CTĐT")
-        verbose_name_plural = _("Phiên bản CTĐT")
+        verbose_name = _("Phiên bản tài liệu")
+        verbose_name_plural = _("Phiên bản tài liệu")
         ordering = ["-version_number"]
-        unique_together = ["program", "version_number"]
-
-    def save(self, *args, **kwargs):
-        # Auto-calculate version_number if not provided
-        if not self.version_number:
-            last = (
-                ProgramVersion.objects.filter(program=self.program)
-                .order_by("-version_number")
-                .first()
-            )
-            self.version_number = (last.version_number + 1) if last else 1
-
-        # Auto-generate snapshot_data when empty and program is assigned
-        if not self.snapshot_data and self.program_id:
-            from hutech_program.workflows.services import VersionService
-
-            self.snapshot_data = VersionService._serialize_program(self.program)
-
-        super().save(*args, **kwargs)
+        unique_together = ["entity_type", "entity_id", "version_number"]
+        indexes = [
+            models.Index(
+                fields=["entity_type", "entity_id", "-version_number"]
+            ),
+        ]
 
     def __str__(self) -> str:
-        return f"{self.program.program_code} v{self.version_number}"
+        return f"{self.entity_type}:{self.entity_id} v{self.version_number}"
+
+
+# ────────────────────── Legacy alias ──────────────────────
+# Keep backward compatibility for existing code referencing ProgramVersion
+ProgramVersion = EntityVersion
