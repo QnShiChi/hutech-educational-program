@@ -404,6 +404,19 @@ wheels = [
 ]
 
 [[package]]
+name = "django-admin-interface"
+version = "0.32.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django-colorfield" },
+    { name = "python-slugify" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3e/09/d0b1a037bb11dc0d50e610e5f2818caa0eded9285aae0963703655692820/django_admin_interface-0.32.0.tar.gz", hash = "sha256:d0e80e382a7084ff59d0ba06934d6690fb6c04bb5327574f4c03b602fe41219c", size = 201052, upload-time = "2025-12-19T01:34:36.693Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fd/85/3d5fbe90a1b52bbc650986e9a24284f2ad20eec8cd59cb99ba96a645d76f/django_admin_interface-0.32.0-py3-none-any.whl", hash = "sha256:f3684cfb857c12dd0befc95d5d45ac8a04840d54ad7d5920a9a10f3606e1bdcf", size = 266349, upload-time = "2025-12-19T01:34:35.016Z" },
+]
+
+[[package]]
 name = "django-allauth"
 version = "65.14.3"
 source = { registry = "https://pypi.org/simple" }
@@ -452,6 +465,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/05/45/fc97bc1d9af8e7dc07f1e37044d9551a30e6793249864cef802341e2e3a8/django_celery_beat-2.9.0.tar.gz", hash = "sha256:92404650f52fcb44cf08e2b09635cb1558327c54b1a5d570f0e2d3a22130934c", size = 177667, upload-time = "2026-02-28T16:45:34.749Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/71/ae/9befa7ae37f5e5c41be636a254fcf47ff30dd5c88bd115070e252f6b9162/django_celery_beat-2.9.0-py3-none-any.whl", hash = "sha256:4a9e5ebe26d6f8d7215e1fc5c46e466016279dc102435a28141108649bdf2157", size = 105013, upload-time = "2026-02-28T16:45:32.822Z" },
+]
+
+[[package]]
+name = "django-colorfield"
+version = "0.14.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pillow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/49/4a/dcc1c9a071cf7e32391139843d4eb127a91bf9cbfe19596f924d51cb1680/django_colorfield-0.14.0.tar.gz", hash = "sha256:478dbd3975a88f2ea2a9afc325faaca05c54ebf04ec985ce130f6dea39dfb899", size = 36971, upload-time = "2025-04-30T19:27:39.581Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e0/63/1226d92ec38286a7c1d41959fb2fb5ba4dd68e4a179d3554c478e8ee6c92/django_colorfield-0.14.0-py3-none-any.whl", hash = "sha256:f169c4e7ad8f336e51d4ea81f866346e7d4f336f3766e54e144cd16ea7d84a0e", size = 34827, upload-time = "2025-04-30T19:27:38.245Z" },
 ]
 
 [[package]]
@@ -823,9 +848,11 @@ dependencies = [
     { name = "celery" },
     { name = "crispy-bootstrap5" },
     { name = "django" },
+    { name = "django-admin-interface" },
     { name = "django-allauth", extra = ["mfa"] },
     { name = "django-anymail" },
     { name = "django-celery-beat" },
+    { name = "django-colorfield" },
     { name = "django-cors-headers" },
     { name = "django-crispy-forms" },
     { name = "django-environ" },
@@ -875,9 +902,11 @@ requires-dist = [
     { name = "celery", specifier = "==5.6.2" },
     { name = "crispy-bootstrap5", specifier = "==2026.3" },
     { name = "django", specifier = "==5.2.12" },
+    { name = "django-admin-interface", specifier = ">=0.32.0" },
     { name = "django-allauth", extras = ["mfa"], specifier = "==65.14.3" },
     { name = "django-anymail", specifier = "==14.0" },
     { name = "django-celery-beat", specifier = "==2.9.0" },
+    { name = "django-colorfield", specifier = ">=0.14.0" },
     { name = "django-cors-headers", specifier = ">=4.4.0" },
     { name = "django-crispy-forms", specifier = "==2.6" },
     { name = "django-environ", specifier = "==0.13.0" },
