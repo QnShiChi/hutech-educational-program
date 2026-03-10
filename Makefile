@@ -113,12 +113,14 @@ bash-frontend: ## Open a bash shell in frontend container
 # ----------------------------------------------------------------------------
 # 🗄️  Database
 # ----------------------------------------------------------------------------
-.PHONY: db-backup db-restore db-reset
+.PHONY: backup-db restore-db db-reset
 
-db-backup: ## Backup database
+backup-db: ## Backup database
 	$(DC) exec postgres backup
+	mkdir -p backups
+	docker cp hutech_program_local_postgres:/backups/. backups/
 
-db-restore: ## Restore database – Usage: make db-restore file="backup_2026_03_07.sql.gz"
+restore-db: ## Restore database – Usage: make restore-db file="backup_2026_03_07.sql.gz"
 	$(DC) exec postgres restore $(file)
 
 db-reset: ## Reset database (DESTRUCTIVE) – drops and recreates
