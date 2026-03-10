@@ -1,0 +1,995 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-03-10 09:55+0700\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+#: hutech_program/imports/apps.py:8
+msgid "Import Word files"
+msgstr ""
+
+#: hutech_program/imports/models.py:15
+msgid "Chờ xử lý"
+msgstr ""
+
+#: hutech_program/imports/models.py:16 hutech_program/workflows/models.py:20
+msgid "Đang xử lý"
+msgstr ""
+
+#: hutech_program/imports/models.py:17
+msgid "Xem trước"
+msgstr ""
+
+#: hutech_program/imports/models.py:18 hutech_program/workflows/models.py:21
+msgid "Hoàn thành"
+msgstr ""
+
+#: hutech_program/imports/models.py:19
+msgid "Thất bại"
+msgstr ""
+
+#: hutech_program/imports/models.py:30
+msgid "Tên file"
+msgstr ""
+
+#: hutech_program/imports/models.py:34
+msgid "File upload"
+msgstr ""
+
+#: hutech_program/imports/models.py:39 hutech_program/rbac/models.py:18
+msgid "Khoa"
+msgstr ""
+
+#: hutech_program/imports/models.py:45 hutech_program/programs/models.py:123
+#: hutech_program/workflows/models.py:63 hutech_program/workflows/models.py:163
+msgid "Trạng thái"
+msgstr ""
+
+#: hutech_program/imports/models.py:49
+msgid "Tiến độ (%)"
+msgstr ""
+
+#: hutech_program/imports/models.py:54
+msgid "Dữ liệu đã phân tích"
+msgstr ""
+
+#: hutech_program/imports/models.py:59
+msgid "Kết quả"
+msgstr ""
+
+#: hutech_program/imports/models.py:60
+msgid "{program_id, warnings, errors}"
+msgstr ""
+
+#: hutech_program/imports/models.py:68
+msgid "CTĐT đã tạo"
+msgstr ""
+
+#: hutech_program/imports/models.py:74
+msgid "Người upload"
+msgstr ""
+
+#: hutech_program/imports/models.py:78
+msgid "Thông báo lỗi"
+msgstr ""
+
+#: hutech_program/imports/models.py:82 hutech_program/imports/models.py:83
+msgid "Tác vụ import"
+msgstr ""
+
+#: hutech_program/notifications/apps.py:8
+#: hutech_program/notifications/models.py:53
+#: hutech_program/notifications/models.py:54
+msgid "Thông báo"
+msgstr ""
+
+#: hutech_program/notifications/models.py:22
+msgid "Người nhận"
+msgstr ""
+
+#: hutech_program/notifications/models.py:26
+msgid "Tiêu đề"
+msgstr ""
+
+#: hutech_program/notifications/models.py:29
+#: hutech_program/workflows/admin.py:155 hutech_program/workflows/models.py:218
+msgid "Nội dung"
+msgstr ""
+
+#: hutech_program/notifications/models.py:34
+msgid "Liên kết"
+msgstr ""
+
+#: hutech_program/notifications/models.py:39
+msgid "Loại thông báo"
+msgstr ""
+
+#: hutech_program/notifications/models.py:40
+msgid "WORKFLOW, COURSE_CHANGE, SYSTEM, REMINDER"
+msgstr ""
+
+#: hutech_program/notifications/models.py:44
+msgid "Đã đọc"
+msgstr ""
+
+#: hutech_program/notifications/models.py:49
+msgid "Thời gian đọc"
+msgstr ""
+
+#: hutech_program/programs/apps.py:8 hutech_program/programs/models.py:145
+#: hutech_program/programs/models.py:146 hutech_program/rbac/models.py:26
+#: hutech_program/workflows/models.py:35
+msgid "Chương trình đào tạo"
+msgstr ""
+
+#: hutech_program/programs/models.py:20
+msgid "Bản nháp"
+msgstr ""
+
+#: hutech_program/programs/models.py:21
+msgid "Đã nộp"
+msgstr ""
+
+#: hutech_program/programs/models.py:22
+msgid "Khoa đang xét duyệt"
+msgstr ""
+
+#: hutech_program/programs/models.py:23
+msgid "Khoa đã duyệt"
+msgstr ""
+
+#: hutech_program/programs/models.py:24
+msgid "Phòng ĐT đang xét duyệt"
+msgstr ""
+
+#: hutech_program/programs/models.py:25
+msgid "Phòng ĐT đã duyệt"
+msgstr ""
+
+#: hutech_program/programs/models.py:26
+msgid "BGH đang xét duyệt"
+msgstr ""
+
+#: hutech_program/programs/models.py:27
+msgid "Đã công bố"
+msgstr ""
+
+#: hutech_program/programs/models.py:28
+msgid "Cần chỉnh sửa"
+msgstr ""
+
+#: hutech_program/programs/models.py:32
+msgid "Đại học"
+msgstr ""
+
+#: hutech_program/programs/models.py:33
+msgid "Thạc sĩ"
+msgstr ""
+
+#: hutech_program/programs/models.py:34
+msgid "Tiến sĩ"
+msgstr ""
+
+#: hutech_program/programs/models.py:47
+msgid "Tên chương trình (VN)"
+msgstr ""
+
+#: hutech_program/programs/models.py:50
+msgid "Tên chương trình (EN)"
+msgstr ""
+
+#: hutech_program/programs/models.py:53
+msgid "Mã chương trình"
+msgstr ""
+
+#: hutech_program/programs/models.py:56
+msgid "Tên bằng cấp"
+msgstr ""
+
+#: hutech_program/programs/models.py:62
+msgid "Trình độ đào tạo"
+msgstr ""
+
+#: hutech_program/programs/models.py:68 hutech_program/programs/models.py:410
+msgid "Khoa quản lý"
+msgstr ""
+
+#: hutech_program/programs/models.py:73
+msgid "Tổng số tín chỉ"
+msgstr ""
+
+#: hutech_program/programs/models.py:76
+msgid "Thời gian đào tạo"
+msgstr ""
+
+#: hutech_program/programs/models.py:81
+msgid "Số quyết định"
+msgstr ""
+
+#: hutech_program/programs/models.py:84
+msgid "Ngày quyết định"
+msgstr ""
+
+#: hutech_program/programs/models.py:89
+msgid "Nơi ban hành"
+msgstr ""
+
+#: hutech_program/programs/models.py:94
+msgid "Mục tiêu chung"
+msgstr ""
+
+#: hutech_program/programs/models.py:97
+msgid "Điều kiện tuyển sinh"
+msgstr ""
+
+#: hutech_program/programs/models.py:100
+msgid "Điều kiện tốt nghiệp"
+msgstr ""
+
+#: hutech_program/programs/models.py:103
+msgid "Vị trí việc làm"
+msgstr ""
+
+#: hutech_program/programs/models.py:106
+msgid "Khả năng học tập nâng cao"
+msgstr ""
+
+#: hutech_program/programs/models.py:109
+msgid "Phương pháp giảng dạy"
+msgstr ""
+
+#: hutech_program/programs/models.py:112
+msgid "Phương pháp đánh giá"
+msgstr ""
+
+#: hutech_program/programs/models.py:115
+msgid "Hướng dẫn thực hiện"
+msgstr ""
+
+#: hutech_program/programs/models.py:125
+msgid "Phiên bản"
+msgstr ""
+
+#: hutech_program/programs/models.py:133 hutech_program/workflows/models.py:265
+msgid "Người tạo"
+msgstr ""
+
+#: hutech_program/programs/models.py:141
+msgid "Người sửa cuối"
+msgstr ""
+
+#: hutech_program/programs/models.py:190 hutech_program/programs/models.py:213
+#: hutech_program/programs/models.py:300 hutech_program/programs/models.py:467
+#: hutech_program/programs/models.py:557 hutech_program/programs/models.py:637
+msgid "Chương trình"
+msgstr ""
+
+#: hutech_program/programs/models.py:192
+msgid "Mã PO"
+msgstr ""
+
+#: hutech_program/programs/models.py:193 hutech_program/programs/models.py:216
+#: hutech_program/programs/models.py:280 hutech_program/programs/models.py:352
+#: hutech_program/rbac/models.py:102 hutech_program/rbac/models.py:122
+msgid "Mô tả"
+msgstr ""
+
+#: hutech_program/programs/models.py:194 hutech_program/programs/models.py:227
+#: hutech_program/programs/models.py:281 hutech_program/programs/models.py:327
+#: hutech_program/programs/models.py:569
+msgid "Thứ tự"
+msgstr ""
+
+#: hutech_program/programs/models.py:197 hutech_program/programs/models.py:198
+msgid "Mục tiêu đào tạo (PO)"
+msgstr ""
+
+#: hutech_program/programs/models.py:215
+msgid "Mã PLO"
+msgstr ""
+
+#: hutech_program/programs/models.py:221
+msgid "Mức năng lực (Bloom)"
+msgstr ""
+
+#: hutech_program/programs/models.py:222
+msgid "0.0 - 6.0"
+msgstr ""
+
+#: hutech_program/programs/models.py:225
+msgid "Nhãn năng lực"
+msgstr ""
+
+#: hutech_program/programs/models.py:233
+msgid "Mục tiêu liên quan"
+msgstr ""
+
+#: hutech_program/programs/models.py:237 hutech_program/programs/models.py:238
+msgid "Chuẩn đầu ra (PLO)"
+msgstr ""
+
+#: hutech_program/programs/models.py:253 hutech_program/programs/models.py:277
+msgid "PLO"
+msgstr ""
+
+#: hutech_program/programs/models.py:258
+msgid "PO"
+msgstr ""
+
+#: hutech_program/programs/models.py:262 hutech_program/programs/models.py:263
+msgid "PO-PLO Mapping"
+msgstr ""
+
+#: hutech_program/programs/models.py:279
+msgid "Mã PI"
+msgstr ""
+
+#: hutech_program/programs/models.py:284 hutech_program/programs/models.py:285
+msgid "Chỉ số đo lường (PI)"
+msgstr ""
+
+#: hutech_program/programs/models.py:302
+msgid "Tên khối kiến thức"
+msgstr ""
+
+#: hutech_program/programs/models.py:309
+msgid "Khối cha"
+msgstr ""
+
+#: hutech_program/programs/models.py:312 hutech_program/programs/models.py:380
+msgid "Tổng tín chỉ"
+msgstr ""
+
+#: hutech_program/programs/models.py:315
+msgid "Tín chỉ bắt buộc"
+msgstr ""
+
+#: hutech_program/programs/models.py:318
+msgid "Tín chỉ tự chọn"
+msgstr ""
+
+#: hutech_program/programs/models.py:325
+msgid "Tỷ lệ (%)"
+msgstr ""
+
+#: hutech_program/programs/models.py:330 hutech_program/programs/models.py:331
+#: hutech_program/programs/models.py:481
+msgid "Khối kiến thức"
+msgstr ""
+
+#: hutech_program/programs/models.py:350
+msgid "Tên nhóm"
+msgstr ""
+
+#: hutech_program/programs/models.py:355 hutech_program/programs/models.py:356
+#: hutech_program/programs/models.py:421
+msgid "Nhóm học phần"
+msgstr ""
+
+#: hutech_program/programs/models.py:369
+msgid "Mã học phần"
+msgstr ""
+
+#: hutech_program/programs/models.py:372
+msgid "Tên học phần (VN)"
+msgstr ""
+
+#: hutech_program/programs/models.py:375
+msgid "Tên học phần (EN)"
+msgstr ""
+
+#: hutech_program/programs/models.py:383
+msgid "Tín chỉ lý thuyết"
+msgstr ""
+
+#: hutech_program/programs/models.py:386
+msgid "Tín chỉ thực hành"
+msgstr ""
+
+#: hutech_program/programs/models.py:389
+msgid "Tín chỉ đồ án"
+msgstr ""
+
+#: hutech_program/programs/models.py:392
+msgid "Tín chỉ thực tập"
+msgstr ""
+
+#: hutech_program/programs/models.py:397
+msgid "Tổng giờ"
+msgstr ""
+
+#: hutech_program/programs/models.py:400
+msgid "Giờ lý thuyết"
+msgstr ""
+
+#: hutech_program/programs/models.py:403
+msgid "Giờ thực hành"
+msgstr ""
+
+#: hutech_program/programs/models.py:413
+msgid "Mô tả tóm tắt"
+msgstr ""
+
+#: hutech_program/programs/models.py:424
+msgid "Đang sử dụng"
+msgstr ""
+
+#: hutech_program/programs/models.py:428 hutech_program/programs/models.py:429
+#: hutech_program/programs/models.py:473 hutech_program/rbac/models.py:29
+msgid "Học phần"
+msgstr ""
+
+#: hutech_program/programs/models.py:452
+#, python-format
+msgid ""
+"Tổng tín chỉ (%(total)s) phải bằng lý thuyết + thực hành + đồ án + thực tập "
+"(%(expected)s)."
+msgstr ""
+
+#: hutech_program/programs/models.py:484
+msgid "Số thứ tự"
+msgstr ""
+
+#: hutech_program/programs/models.py:485
+msgid "VD: I.01, II.03"
+msgstr ""
+
+#: hutech_program/programs/models.py:488
+msgid "Bắt buộc"
+msgstr ""
+
+#: hutech_program/programs/models.py:489
+msgid "Bắt buộc / Tự chọn"
+msgstr ""
+
+#: hutech_program/programs/models.py:492
+msgid "Học kỳ khuyến nghị"
+msgstr ""
+
+#: hutech_program/programs/models.py:493 hutech_program/programs/models.py:561
+msgid "1-8"
+msgstr ""
+
+#: hutech_program/programs/models.py:496
+msgid "Đợt"
+msgstr ""
+
+#: hutech_program/programs/models.py:497
+msgid "A hoặc B"
+msgstr ""
+
+#: hutech_program/programs/models.py:500
+msgid "Phần mềm yêu cầu"
+msgstr ""
+
+#: hutech_program/programs/models.py:502
+msgid "Ghi chú"
+msgstr ""
+
+#: hutech_program/programs/models.py:505 hutech_program/programs/models.py:506
+#: hutech_program/programs/models.py:527 hutech_program/programs/models.py:566
+#: hutech_program/programs/models.py:600
+msgid "Học phần trong CTĐT"
+msgstr ""
+
+#: hutech_program/programs/models.py:515
+msgid "Học trước"
+msgstr ""
+
+#: hutech_program/programs/models.py:516
+msgid "Song hành"
+msgstr ""
+
+#: hutech_program/programs/models.py:532
+msgid "Học phần tiên quyết"
+msgstr ""
+
+#: hutech_program/programs/models.py:538
+msgid "Loại"
+msgstr ""
+
+#: hutech_program/programs/models.py:542 hutech_program/programs/models.py:543
+msgid "Điều kiện tiên quyết"
+msgstr ""
+
+#: hutech_program/programs/models.py:560
+msgid "Học kỳ"
+msgstr ""
+
+#: hutech_program/programs/models.py:573 hutech_program/programs/models.py:574
+msgid "Kế hoạch học kỳ"
+msgstr ""
+
+#: hutech_program/programs/models.py:586
+msgid "Không đóng góp"
+msgstr ""
+
+#: hutech_program/programs/models.py:587
+msgid "Thấp"
+msgstr ""
+
+#: hutech_program/programs/models.py:588
+msgid "Trung bình"
+msgstr ""
+
+#: hutech_program/programs/models.py:589
+msgid "Cao"
+msgstr ""
+
+#: hutech_program/programs/models.py:606 hutech_program/programs/models.py:643
+msgid "Chỉ số PI"
+msgstr ""
+
+#: hutech_program/programs/models.py:611
+msgid "Mức đóng góp"
+msgstr ""
+
+#: hutech_program/programs/models.py:615 hutech_program/programs/models.py:616
+msgid "Đóng góp HP-PLO-PI"
+msgstr ""
+
+#: hutech_program/programs/models.py:647
+msgid "HP đóng góp"
+msgstr ""
+
+#: hutech_program/programs/models.py:648
+msgid "VD: POS104 POS105 POS106"
+msgstr ""
+
+#: hutech_program/programs/models.py:656
+msgid "HP lấy mẫu"
+msgstr ""
+
+#: hutech_program/programs/models.py:661
+msgid "Minh chứng trực tiếp"
+msgstr ""
+
+#: hutech_program/programs/models.py:662
+msgid "VD: Chuyên cần, Báo cáo cuối kỳ"
+msgstr ""
+
+#: hutech_program/programs/models.py:667
+msgid "Công cụ đánh giá"
+msgstr ""
+
+#: hutech_program/programs/models.py:668
+msgid "VD: Điểm chuyên cần, Rubric"
+msgstr ""
+
+#: hutech_program/programs/models.py:673
+msgid "Tiêu chuẩn kỳ vọng"
+msgstr ""
+
+#: hutech_program/programs/models.py:674
+msgid "VD: Tối thiểu 70% người học đáp ứng"
+msgstr ""
+
+#: hutech_program/programs/models.py:679
+msgid "Lịch đánh giá"
+msgstr ""
+
+#: hutech_program/programs/models.py:680
+msgid "VD: HK1 / năm 3"
+msgstr ""
+
+#: hutech_program/programs/models.py:685
+msgid "Giảng viên phụ trách"
+msgstr ""
+
+#: hutech_program/programs/models.py:690
+msgid "Đơn vị quản lý"
+msgstr ""
+
+#: hutech_program/programs/models.py:694 hutech_program/programs/models.py:695
+msgid "Kế hoạch đánh giá PLO"
+msgstr ""
+
+#: hutech_program/rbac/apps.py:8
+msgid "Phân quyền & Vai trò"
+msgstr ""
+
+#: hutech_program/rbac/models.py:19
+msgid "Viện"
+msgstr ""
+
+#: hutech_program/rbac/models.py:20
+msgid "Phòng"
+msgstr ""
+
+#: hutech_program/rbac/models.py:21
+msgid "Trung tâm"
+msgstr ""
+
+#: hutech_program/rbac/models.py:22
+msgid "Ban Giám Hiệu"
+msgstr ""
+
+#: hutech_program/rbac/models.py:27 hutech_program/workflows/models.py:36
+msgid "Chuẩn đầu ra"
+msgstr ""
+
+#: hutech_program/rbac/models.py:28 hutech_program/workflows/models.py:37
+msgid "Đề cương chi tiết"
+msgstr ""
+
+#: hutech_program/rbac/models.py:30
+msgid "Quản trị hệ thống"
+msgstr ""
+
+#: hutech_program/rbac/models.py:34
+msgid "Tạo mới"
+msgstr ""
+
+#: hutech_program/rbac/models.py:35
+msgid "Cập nhật"
+msgstr ""
+
+#: hutech_program/rbac/models.py:36
+msgid "Xóa"
+msgstr ""
+
+#: hutech_program/rbac/models.py:37
+msgid "Nộp duyệt"
+msgstr ""
+
+#: hutech_program/rbac/models.py:38
+msgid "Phê duyệt"
+msgstr ""
+
+#: hutech_program/rbac/models.py:39 hutech_program/workflows/models.py:30
+msgid "Từ chối"
+msgstr ""
+
+#: hutech_program/rbac/models.py:40
+msgid "Quay lại phiên bản"
+msgstr ""
+
+#: hutech_program/rbac/models.py:53
+msgid "Mã đơn vị"
+msgstr ""
+
+#: hutech_program/rbac/models.py:55
+msgid "Tên đơn vị"
+msgstr ""
+
+#: hutech_program/rbac/models.py:57
+msgid "Tên tiếng Anh"
+msgstr ""
+
+#: hutech_program/rbac/models.py:63
+msgid "Loại đơn vị"
+msgstr ""
+
+#: hutech_program/rbac/models.py:71
+msgid "Đơn vị cha"
+msgstr ""
+
+#: hutech_program/rbac/models.py:73
+msgid "Hoạt động"
+msgstr ""
+
+#: hutech_program/rbac/models.py:76 hutech_program/rbac/models.py:77
+#: hutech_program/rbac/models.py:192 hutech_program/users/models.py:43
+msgid "Đơn vị"
+msgstr ""
+
+#: hutech_program/rbac/models.py:94
+msgid "Mã quyền"
+msgstr ""
+
+#: hutech_program/rbac/models.py:96
+msgid "Tên quyền"
+msgstr ""
+
+#: hutech_program/rbac/models.py:100
+msgid "Module"
+msgstr ""
+
+#: hutech_program/rbac/models.py:105 hutech_program/rbac/models.py:106
+#: hutech_program/rbac/models.py:160
+msgid "Quyền"
+msgstr ""
+
+#: hutech_program/rbac/models.py:119
+msgid "Mã vai trò"
+msgstr ""
+
+#: hutech_program/rbac/models.py:121
+msgid "Tên vai trò"
+msgstr ""
+
+#: hutech_program/rbac/models.py:125
+msgid "Cấp bậc"
+msgstr ""
+
+#: hutech_program/rbac/models.py:126
+msgid "Thứ tự trong hệ thống phê duyệt"
+msgstr ""
+
+#: hutech_program/rbac/models.py:130
+msgid "Vai trò hệ thống"
+msgstr ""
+
+#: hutech_program/rbac/models.py:131
+msgid "Vai trò hệ thống không thể xóa"
+msgstr ""
+
+#: hutech_program/rbac/models.py:138
+msgid "Quyền hạn"
+msgstr ""
+
+#: hutech_program/rbac/models.py:142 hutech_program/rbac/models.py:143
+#: hutech_program/rbac/models.py:157 hutech_program/rbac/models.py:187
+msgid "Vai trò"
+msgstr ""
+
+#: hutech_program/rbac/models.py:164 hutech_program/rbac/models.py:165
+msgid "Quyền của vai trò"
+msgstr ""
+
+#: hutech_program/rbac/models.py:182 hutech_program/users/apps.py:7
+#: hutech_program/users/models.py:48 hutech_program/users/models.py:49
+msgid "Người dùng"
+msgstr ""
+
+#: hutech_program/rbac/models.py:193
+msgid "Vai trò này có hiệu lực trong đơn vị nào"
+msgstr ""
+
+#: hutech_program/rbac/models.py:201
+msgid "Người gán"
+msgstr ""
+
+#: hutech_program/rbac/models.py:205 hutech_program/rbac/models.py:206
+msgid "Vai trò người dùng"
+msgstr ""
+
+#: hutech_program/rbac/models.py:225 hutech_program/workflows/models.py:171
+msgid "Người thực hiện"
+msgstr ""
+
+#: hutech_program/rbac/models.py:230
+msgid "Hành động"
+msgstr ""
+
+#: hutech_program/rbac/models.py:233 hutech_program/workflows/models.py:53
+#: hutech_program/workflows/models.py:246
+msgid "Loại đối tượng"
+msgstr ""
+
+#: hutech_program/rbac/models.py:235 hutech_program/workflows/models.py:57
+#: hutech_program/workflows/models.py:248
+msgid "ID đối tượng"
+msgstr ""
+
+#: hutech_program/rbac/models.py:237
+msgid "Dữ liệu cũ"
+msgstr ""
+
+#: hutech_program/rbac/models.py:240
+msgid "Dữ liệu mới"
+msgstr ""
+
+#: hutech_program/rbac/models.py:243
+msgid "Địa chỉ IP"
+msgstr ""
+
+#: hutech_program/rbac/models.py:245
+msgid "User Agent"
+msgstr ""
+
+#: hutech_program/rbac/models.py:247
+msgid "Thời gian"
+msgstr ""
+
+#: hutech_program/rbac/models.py:251 hutech_program/rbac/models.py:252
+msgid "Nhật ký"
+msgstr ""
+
+#: hutech_program/templates/allauth/layouts/entrance.html:8
+#: hutech_program/templates/base.html:98
+msgid "Sign In"
+msgstr ""
+
+#: hutech_program/templates/base.html:83
+msgid "My Profile"
+msgstr ""
+
+#: hutech_program/templates/base.html:87
+msgid "Sign Out"
+msgstr ""
+
+#: hutech_program/templates/base.html:93
+msgid "Sign Up"
+msgstr ""
+
+#: hutech_program/users/admin.py:23
+msgid "Personal info"
+msgstr ""
+
+#: hutech_program/users/admin.py:27
+msgid "Permissions"
+msgstr ""
+
+#: hutech_program/users/admin.py:38
+msgid "Important dates"
+msgstr ""
+
+#: hutech_program/users/forms.py:23 hutech_program/users/tests/test_forms.py:35
+msgid "This username has already been taken."
+msgstr ""
+
+#: hutech_program/users/models.py:21
+msgid "Tên người dùng"
+msgstr ""
+
+#: hutech_program/users/models.py:31
+msgid "Mã nhân viên"
+msgstr ""
+
+#: hutech_program/users/models.py:36
+msgid "Số điện thoại"
+msgstr ""
+
+#: hutech_program/users/tests/test_views.py:72 hutech_program/users/views.py:25
+msgid "Information successfully updated"
+msgstr ""
+
+#: hutech_program/workflows/admin.py:90
+msgid "Đối tượng"
+msgstr ""
+
+#: hutech_program/workflows/admin.py:98
+msgid "Tiến độ"
+msgstr ""
+
+#: hutech_program/workflows/apps.py:8 hutech_program/workflows/models.py:86
+#: hutech_program/workflows/models.py:87
+msgid "Quy trình phê duyệt"
+msgstr ""
+
+#: hutech_program/workflows/models.py:22
+msgid "Bị từ chối"
+msgstr ""
+
+#: hutech_program/workflows/models.py:23
+msgid "Đã hủy"
+msgstr ""
+
+#: hutech_program/workflows/models.py:27
+msgid "Chờ đến lượt"
+msgstr ""
+
+#: hutech_program/workflows/models.py:28
+msgid "Đang xét duyệt"
+msgstr ""
+
+#: hutech_program/workflows/models.py:29
+msgid "Đã duyệt"
+msgstr ""
+
+#: hutech_program/workflows/models.py:31
+msgid "Bỏ qua"
+msgstr ""
+
+#: hutech_program/workflows/models.py:67
+msgid "Bước hiện tại"
+msgstr ""
+
+#: hutech_program/workflows/models.py:71
+msgid "Tổng số bước"
+msgstr ""
+
+#: hutech_program/workflows/models.py:77
+msgid "Người khởi tạo"
+msgstr ""
+
+#: hutech_program/workflows/models.py:82
+msgid "Thời gian hoàn thành"
+msgstr ""
+
+#: hutech_program/workflows/models.py:136
+msgid "Quy trình"
+msgstr ""
+
+#: hutech_program/workflows/models.py:139
+msgid "Số bước"
+msgstr ""
+
+#: hutech_program/workflows/models.py:143
+msgid "Tên bước"
+msgstr ""
+
+#: hutech_program/workflows/models.py:148
+msgid "Vai trò cần có"
+msgstr ""
+
+#: hutech_program/workflows/models.py:149
+msgid "Vai trò cần có để duyệt bước này"
+msgstr ""
+
+#: hutech_program/workflows/models.py:153
+msgid "Phạm vi đơn vị"
+msgstr ""
+
+#: hutech_program/workflows/models.py:155
+msgid ""
+"True = phải cùng department với entity. False = cross-department (PDT, BGH)"
+msgstr ""
+
+#: hutech_program/workflows/models.py:176
+msgid "Thời gian xử lý"
+msgstr ""
+
+#: hutech_program/workflows/models.py:180
+msgid "Nhận xét"
+msgstr ""
+
+#: hutech_program/workflows/models.py:185
+msgid "Phiên bản (locking)"
+msgstr ""
+
+#: hutech_program/workflows/models.py:189
+#: hutech_program/workflows/models.py:190
+msgid "Bước phê duyệt"
+msgstr ""
+
+#: hutech_program/workflows/models.py:211
+msgid "Bước"
+msgstr ""
+
+#: hutech_program/workflows/models.py:216
+msgid "Tác giả"
+msgstr ""
+
+#: hutech_program/workflows/models.py:225
+msgid "Phản hồi cho"
+msgstr ""
+
+#: hutech_program/workflows/models.py:229
+#: hutech_program/workflows/models.py:230
+msgid "Bình luận phê duyệt"
+msgstr ""
+
+#: hutech_program/workflows/models.py:250
+msgid "Số phiên bản"
+msgstr ""
+
+#: hutech_program/workflows/models.py:254
+msgid "Dữ liệu snapshot"
+msgstr ""
+
+#: hutech_program/workflows/models.py:255
+msgid "Full serialized entity data at approval time"
+msgstr ""
+
+#: hutech_program/workflows/models.py:259
+msgid "Tóm tắt thay đổi"
+msgstr ""
+
+#: hutech_program/workflows/models.py:273
+msgid "Quy trình tạo phiên bản"
+msgstr ""
+
+#: hutech_program/workflows/models.py:277
+#: hutech_program/workflows/models.py:278
+msgid "Phiên bản tài liệu"
+msgstr ""
+
+
+
+msgid "Show counts"
+msgstr "Hiển thị số lượng"

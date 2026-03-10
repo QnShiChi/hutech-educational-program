@@ -20,11 +20,11 @@ class UserAdmin(auth_admin.UserAdmin):
     fieldsets = (
         (None, {"fields": ("username", "password")}),
         (
-            _("Personal info"),
+            _("Thông tin cá nhân"),
             {"fields": ("name", "email", "employee_id", "phone", "department")},
         ),
         (
-            _("Permissions"),
+            _("Phân quyền"),
             {
                 "fields": (
                     "is_active",
@@ -35,7 +35,7 @@ class UserAdmin(auth_admin.UserAdmin):
                 ),
             },
         ),
-        (_("Important dates"), {"fields": ("last_login", "date_joined")}),
+        (_("Ngày quan trọng"), {"fields": ("last_login", "date_joined")}),
     )
     list_display = ["username", "name", "employee_id", "department", "is_superuser"]
     search_fields = ["name", "username", "employee_id"]

@@ -26,14 +26,12 @@ DEBUG = env.bool("DJANGO_DEBUG", False)
 # In Windows, this must be set to your system time zone.
 TIME_ZONE = "Asia/Ho_Chi_Minh"
 # https://docs.djangoproject.com/en/dev/ref/settings/#language-code
-LANGUAGE_CODE = "en-us"
+LANGUAGE_CODE = "vi"
 # https://docs.djangoproject.com/en/dev/ref/settings/#languages
-# from django.utils.translation import gettext_lazy as _
-# LANGUAGES = [
-#     ('en', _('English')),
-#     ('fr-fr', _('French')),
-#     ('pt-br', _('Portuguese')),
-# ]
+from django.utils.translation import gettext_lazy as _
+LANGUAGES = [
+    ('vi', _('Vietnamese')),
+]
 # https://docs.djangoproject.com/en/dev/ref/settings/#site-id
 SITE_ID = 1
 # https://docs.djangoproject.com/en/dev/ref/settings/#use-i18n
@@ -64,7 +62,7 @@ DJANGO_APPS = [
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
-    "django.contrib.sites",
+    "hutech_program.contrib.vi_apps.VietnameseSitesConfig",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # "django.contrib.humanize", # Handy template tags
@@ -75,10 +73,10 @@ THIRD_PARTY_APPS = [
     "crispy_forms",
     "crispy_bootstrap5",
     "allauth",
-    "allauth.account",
-    "allauth.mfa",
-    "allauth.socialaccount",
-    "django_celery_beat",
+    "hutech_program.contrib.vi_apps.VietnameseAccountConfig",
+    "hutech_program.contrib.vi_apps.VietnameseMfaConfig",
+    "hutech_program.contrib.vi_apps.VietnameseSocialAccountConfig",
+    "hutech_program.contrib.vi_apps.VietnameseCeleryBeatConfig",
     "rest_framework",
     "corsheaders",
     "django_filters",
@@ -87,9 +85,9 @@ THIRD_PARTY_APPS = [
 ]
 
 LOCAL_APPS = [
+    "hutech_program.programs",
     "hutech_program.users",
     "hutech_program.rbac",
-    "hutech_program.programs",
     "hutech_program.workflows",
     "hutech_program.imports",
     "hutech_program.notifications",
