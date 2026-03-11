@@ -28,6 +28,12 @@ class ProgramStatus(models.TextChoices):
     REVISION_REQUIRED = "REVISION_REQUIRED", _("Cần chỉnh sửa")
 
 
+class VersionStatus(models.TextChoices):
+    DRAFT = "DRAFT", _("Bản nháp")
+    ACTIVE = "ACTIVE", _("Đang áp dụng")
+    ARCHIVED = "ARCHIVED", _("Lưu trữ")
+
+
 class EducationLevel(models.TextChoices):
     DAI_HOC = "DAI_HOC", _("Đại học")
     THAC_SI = "THAC_SI", _("Thạc sĩ")
@@ -180,6 +186,41 @@ class TrainingProgram(BaseModel):
         ).first()
 
 
+class TrainingProgramVersion(BaseModel):
+    """
+    Phiên bản Chương trình đào tạo theo năm học.
+    """
+
+    program = models.ForeignKey(
+        TrainingProgram,
+        on_delete=models.CASCADE,
+        related_name="versions",
+        verbose_name=_("Chương trình"),
+    )
+    academic_year = models.CharField(
+        max_length=20, verbose_name=_("Năm học"), help_text=_("VD: 2024-2025")
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=VersionStatus.choices,
+        default=VersionStatus.DRAFT,
+        verbose_name=_("Trạng thái"),
+    )
+
+    class Meta:
+        verbose_name = _("Phiên bản CTĐT")
+        verbose_name_plural = _("Phiên bản CTĐT")
+        ordering = ["-academic_year"]
+        unique_together = ["program", "academic_year"]
+
+    def __str__(self) -> str:
+        return f"{self.program.program_code} - Dành cho NH {self.academic_year}"
+
+    @property
+    def is_editable(self) -> bool:
+        return self.status == VersionStatus.DRAFT
+
+
 class ProgramObjective(BaseModel):
     """Mục tiêu đào tạo (PO)."""
 
@@ -293,11 +334,13 @@ class PerformanceIndicator(BaseModel):
 class KnowledgeBlock(BaseModel):
     """Khối kiến thức."""
 
-    program = models.ForeignKey(
-        TrainingProgram,
+    version = models.ForeignKey(
+        TrainingProgramVersion,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="knowledge_blocks",
-        verbose_name=_("Chương trình"),
+        verbose_name=_("Phiên bản CTĐT"),
     )
     name = models.CharField(max_length=200, verbose_name=_("Tên khối kiến thức"))
     parent = models.ForeignKey(
@@ -332,7 +375,9 @@ class KnowledgeBlock(BaseModel):
         ordering = ["order_index"]
 
     def __str__(self) -> str:
-        return f"{self.program.program_code} / {self.name}"
+        if self.version:
+            return f"{self.version.program.program_code} / {self.name}"
+        return self.name
 
     def save(self, *args, **kwargs):
         # Auto-calculate total_credits
@@ -469,9 +514,19 @@ class ProgramCourse(BaseModel):
 
     program = models.ForeignKey(
         TrainingProgram,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="program_courses_legacy",
+        verbose_name=_("Chương trình (Legacy)"),
+    )
+    version = models.ForeignKey(
+        TrainingProgramVersion,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="program_courses",
-        verbose_name=_("Chương trình"),
+        verbose_name=_("Phiên bản CTĐT"),
     )
     course = models.ForeignKey(
         Course,
@@ -519,11 +574,13 @@ class ProgramCourse(BaseModel):
     class Meta:
         verbose_name = _("Học phần trong CTĐT")
         verbose_name_plural = _("Học phần trong CTĐT")
-        unique_together = ["program", "course"]
+        unique_together = ["version", "course"]
         ordering = ["order_number"]
 
     def __str__(self) -> str:
-        return f"{self.program.program_code} / {self.course.code}"
+        if self.version:
+            return f"{self.version.program.program_code} / {self.course.code}"
+        return self.course.code
 
     def clean(self):
         from django.core.exceptions import ValidationError
@@ -577,9 +634,19 @@ class SemesterPlan(BaseModel):
 
     program = models.ForeignKey(
         TrainingProgram,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="semester_plans_legacy",
+        verbose_name=_("Chương trình (Legacy)"),
+    )
+    version = models.ForeignKey(
+        TrainingProgramVersion,
         on_delete=models.CASCADE,
+        null=True,
+        blank=True,
         related_name="semester_plans",
-        verbose_name=_("Chương trình"),
+        verbose_name=_("Phiên bản CTĐT"),
     )
     semester_number = models.PositiveIntegerField(
         verbose_name=_("Học kỳ"),
@@ -597,7 +664,7 @@ class SemesterPlan(BaseModel):
     class Meta:
         verbose_name = _("Kế hoạch học kỳ")
         verbose_name_plural = _("Kế hoạch học kỳ")
-        unique_together = ["program", "program_course"]
+        unique_together = ["version", "program_course"]
         ordering = ["semester_number", "order_index"]
 
     def __str__(self) -> str:

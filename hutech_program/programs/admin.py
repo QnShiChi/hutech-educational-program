@@ -164,9 +164,9 @@ class CourseGroupInline(admin.TabularInline):
 
 @admin.register(CourseGroup)
 class CourseGroupAdmin(ProgramContextMixin, admin.ModelAdmin):
-    program_relation_field = "knowledge_block__program"
+    program_relation_field = "knowledge_block__version__program"
     list_display = ["name", "knowledge_block", "total_credits", "elective_credits"]
-    list_filter = ["knowledge_block__program"]
+    list_filter = ["knowledge_block__version__program"]
     search_fields = ["name"]
     raw_id_fields = ["knowledge_block"]
 
@@ -175,16 +175,16 @@ class CourseGroupAdmin(ProgramContextMixin, admin.ModelAdmin):
 class KnowledgeBlockAdmin(ProgramContextMixin, admin.ModelAdmin):
     list_display = [
         "name",
-        "program",
+        "version",
         "parent",
         "total_credits",
         "required_credits",
         "elective_credits",
         "percentage",
     ]
-    list_filter = ["program"]
+    list_filter = ["version__program", "version"]
     search_fields = ["name"]
-    raw_id_fields = ["program", "parent"]
+    raw_id_fields = ["version", "parent"]
     inlines = [CourseGroupInline]
 
 
@@ -222,16 +222,16 @@ class ProgramCourseAdmin(ProgramContextMixin, admin.ModelAdmin):
     list_display = [
         "order_number",
         "course",
-        "program",
+        "version",
         "knowledge_block",
         "course_group",
         "is_required",
         "semester",
         "batch",
     ]
-    list_filter = ["program", "is_required", "semester", "knowledge_block", "course_group"]
+    list_filter = ["version__program", "is_required", "semester", "knowledge_block", "course_group"]
     search_fields = ["course__code", "course__name_vi"]
-    raw_id_fields = ["program", "course", "knowledge_block"]
+    raw_id_fields = ["version", "course", "knowledge_block"]
     inlines = [CoursePrerequisiteInline]
 
     class Media:
@@ -267,9 +267,9 @@ class ProgramCourseAdmin(ProgramContextMixin, admin.ModelAdmin):
 
 @admin.register(SemesterPlan)
 class SemesterPlanAdmin(ProgramContextMixin, admin.ModelAdmin):
-    list_display = ["program", "semester_number", "program_course", "order_index"]
-    list_filter = ["program", "semester_number"]
-    raw_id_fields = ["program", "program_course"]
+    list_display = ["version", "semester_number", "program_course", "order_index"]
+    list_filter = ["version__program", "semester_number"]
+    raw_id_fields = ["version", "program_course"]
 
 
 # ────────────────────────── Matrices & Assessment Plan ──────────────────────────
