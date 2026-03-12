@@ -40,6 +40,24 @@ def clone_program_version(source_version: TrainingProgramVersion, new_academic_y
         program=source_version.program,
         academic_year=new_academic_year,
         status=VersionStatus.DRAFT,
+        # Copy content fields
+        total_credits=source_version.total_credits,
+        training_duration=source_version.training_duration,
+        decision_number=source_version.decision_number,
+        decision_date=source_version.decision_date,
+        general_objective=source_version.general_objective,
+        admission_requirements=source_version.admission_requirements,
+        admission_target=source_version.admission_target,
+        admission_criteria=source_version.admission_criteria,
+        graduation_requirements=source_version.graduation_requirements,
+        career_opportunities=source_version.career_opportunities,
+        further_education=source_version.further_education,
+        teaching_methodology=source_version.teaching_methodology,
+        assessment_methodology=source_version.assessment_methodology,
+        implementation_guide=source_version.implementation_guide,
+        reference_programs=source_version.reference_programs,
+        description_update_period=source_version.description_update_period,
+        training_process=source_version.training_process,
     )
 
     # ── 1. Clone KnowledgeBlocks (parents first) ──

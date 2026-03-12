@@ -1,56 +1,194 @@
-{% if active_program %}
+{% load i18n %}
 <div
+  id="program-version-context-bar"
   style="
     background: #e1f5fe;
     border: 1px solid #81d4fa;
-    padding: 10px;
+    padding: 12px 16px;
     margin-bottom: 20px;
-    border-radius: 4px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
   "
 >
-  <strong>Active Training Program Context:</strong>
-  <a
-    href="{% url 'admin:programs_trainingprogram_change' active_program.id %}"
-    style="font-weight: bold; color: #0277bd"
-    >{{ active_program.program_code }} - {{ active_program.program_name_vi }}</a
-  >
-  <span
-    style="margin-left: 10px; padding: 3px 8px; border-radius: 3px; font-size: 11px; background-color: {% if active_program.can_edit %}#c8e6c9; color: #2e7d32;{% else %}#ffccbc; color: #d84315;{% endif %}"
-  >
-    Status: {{ active_program.get_status_display }} {% if active_program.can_edit %}(Editable){% else %}(Locked){% endif %}
-  </span>
-  <div style="margin-top: 10px">
-    <span style="font-size: 12px; color: #555">Manage Tasks:</span>
-    <a
-      href="{% url 'admin:programs_programobjective_changelist' %}"
-      class="button"
-      style="margin-right: 5px"
-      >POs</a
+  {# ──── Dropdown 1: Chọn CTĐT ──── #}
+  <div style="display: flex; align-items: center; gap: 6px;">
+    <label for="ctx-program" style="font-weight: bold; white-space: nowrap; font-size: 13px;">
+      📘 Chương trình:
+    </label>
+    <select
+      id="ctx-program"
+      style="
+        padding: 5px 10px;
+        border: 1px solid #90caf9;
+        border-radius: 4px;
+        background: #fff;
+        font-size: 13px;
+        min-width: 260px;
+      "
     >
-    <a
-      href="{% url 'admin:programs_programlearningoutcome_changelist' %}"
-      class="button"
-      style="margin-right: 5px"
-      >PLOs</a
-    >
-    <a
-      href="{% url 'admin:programs_performanceindicator_changelist' %}"
-      class="button"
-      style="margin-right: 5px"
-      >PIs</a
-    >
-    <a
-      href="{% url 'admin:programs_programcourse_changelist' %}"
-      class="button"
-      style="margin-right: 5px"
-      >Courses</a
-    >
-    <a
-      href="{% url 'admin:programs_semesterplan_changelist' %}"
-      class="button"
-      style="margin-right: 5px"
-      >Semester Plan</a
-    >
+      <option value="">— Chọn chương trình đào tạo —</option>
+      {% for p in all_programs %}
+        <option value="{{ p.id }}"
+          {% if active_program and active_program.id == p.id %}selected{% endif %}
+        >
+          {{ p.program_code }} - {{ p.program_name_vi }}
+        </option>
+      {% endfor %}
+    </select>
   </div>
+
+  {# ──── Dropdown 2: Chọn Phiên bản ──── #}
+  <div style="display: flex; align-items: center; gap: 6px;">
+    <label for="ctx-version" style="font-weight: bold; white-space: nowrap; font-size: 13px;">
+      📅 Phiên bản:
+    </label>
+    <select
+      id="ctx-version"
+      style="
+        padding: 5px 10px;
+        border: 1px solid #90caf9;
+        border-radius: 4px;
+        background: #fff;
+        font-size: 13px;
+        min-width: 160px;
+      "
+      {% if not active_program %}disabled{% endif %}
+    >
+      <option value="">— Chọn phiên bản —</option>
+    </select>
+  </div>
+
+  {# ──── Version Status Badge ──── #}
+  {% if active_version %}
+    <span id="ctx-version-badge" style="
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: bold;
+      {% if active_version.status == 'ACTIVE' %}
+        background-color: #c8e6c9; color: #2e7d32;
+      {% elif active_version.status == 'DRAFT' %}
+        background-color: #fff9c4; color: #f9a825;
+      {% else %}
+        background-color: #e0e0e0; color: #616161;
+      {% endif %}
+    ">
+      {% if active_version.status == 'ACTIVE' %}Đang áp dụng
+      {% elif active_version.status == 'DRAFT' %}Bản nháp
+      {% else %}Đã lưu trữ{% endif %}
+    </span>
+  {% endif %}
+
+  {# ──── Quick nav links ──── #}
+  {% if active_program %}
+    <div style="margin-left: auto; display: flex; gap: 5px; flex-wrap: wrap;">
+      <a href="{% url 'admin:programs_programobjective_changelist' %}" class="button" style="font-size: 11px; padding: 4px 8px;">POs</a>
+      <a href="{% url 'admin:programs_programlearningoutcome_changelist' %}" class="button" style="font-size: 11px; padding: 4px 8px;">PLOs</a>
+      <a href="{% url 'admin:programs_performanceindicator_changelist' %}" class="button" style="font-size: 11px; padding: 4px 8px;">PIs</a>
+      <a href="{% url 'admin:programs_knowledgeblock_changelist' %}" class="button" style="font-size: 11px; padding: 4px 8px;">Khối KT</a>
+      <a href="{% url 'admin:programs_programcourse_changelist' %}" class="button" style="font-size: 11px; padding: 4px 8px;">Học phần</a>
+      <a href="{% url 'admin:programs_semesterplan_changelist' %}" class="button" style="font-size: 11px; padding: 4px 8px;">Kế hoạch HK</a>
+    </div>
+  {% endif %}
 </div>
-{% endif %}
+
+<script>
+(function() {
+  const programSel = document.getElementById('ctx-program');
+  const versionSel = document.getElementById('ctx-version');
+  const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+                    || '{{ csrf_token }}';
+
+  const GET_VERSIONS_URL = '{% url "admin:programs_get_versions" %}';
+  const SET_CONTEXT_URL  = '{% url "admin:programs_set_context" %}';
+
+  // Active version ID from server (for initial selection)
+  const activeVersionId = '{{ active_version.id|default:"" }}';
+
+  // ──── Load versions for a program ────
+  function loadVersions(programId, selectVersionId) {
+    versionSel.innerHTML = '<option value="">— Đang tải... —</option>';
+    versionSel.disabled = true;
+
+    if (!programId) {
+      versionSel.innerHTML = '<option value="">— Chọn phiên bản —</option>';
+      return;
+    }
+
+    fetch(GET_VERSIONS_URL + '?program_id=' + programId)
+      .then(r => r.json())
+      .then(data => {
+        versionSel.innerHTML = '<option value="">— Chọn phiên bản —</option>';
+        (data.versions || []).forEach(v => {
+          const opt = document.createElement('option');
+          opt.value = v.id;
+          let label = 'NH ' + v.academic_year;
+          if (v.status === 'ACTIVE') label += ' ✅';
+          else if (v.status === 'DRAFT')  label += ' 📝';
+          else                             label += ' 📦';
+          opt.textContent = label;
+          if (selectVersionId && String(v.id) === String(selectVersionId)) {
+            opt.selected = true;
+          }
+          versionSel.appendChild(opt);
+        });
+        versionSel.disabled = false;
+
+        // Auto-select first if none selected
+        if (!selectVersionId && data.versions && data.versions.length > 0) {
+          versionSel.value = data.versions[0].id;
+        }
+      });
+  }
+
+  // ──── Set context via POST, then reload ────
+  function setContext(programId, versionId) {
+    const body = new URLSearchParams();
+    if (programId) body.append('program_id', programId);
+    if (versionId) body.append('version_id', versionId);
+
+    fetch(SET_CONTEXT_URL, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': csrfToken,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: body.toString(),
+    }).then(() => {
+      window.location.reload();
+    });
+  }
+
+  // ──── Event: Program changed ────
+  programSel.addEventListener('change', function() {
+    const pid = this.value;
+    if (pid) {
+      loadVersions(pid, null);
+      // Set program context, clear old version
+      setContext(pid, '');
+    } else {
+      versionSel.innerHTML = '<option value="">— Chọn phiên bản —</option>';
+      versionSel.disabled = true;
+      setContext('', '');
+    }
+  });
+
+  // ──── Event: Version changed ────
+  versionSel.addEventListener('change', function() {
+    const vid = this.value;
+    const pid = programSel.value;
+    if (vid) {
+      setContext(pid, vid);
+    }
+  });
+
+  // ──── Initial load: populate version dropdown ────
+  const initialProgramId = programSel.value;
+  if (initialProgramId) {
+    loadVersions(initialProgramId, activeVersionId);
+  }
+})();
+</script>

@@ -236,7 +236,7 @@ class Command(BaseCommand):
             program = self._create_program(department, parsed.get("general_info", {}))
 
             # Create Version
-            version = self._create_version(program)
+            version = self._create_version(program, parsed.get("general_info", {}))
 
             # Create POs
             po_map = self._create_pos(version)
@@ -324,23 +324,24 @@ class Command(BaseCommand):
             degree_name=general_info.get("degree_name", "Cử nhân"),
             education_level="DAI_HOC",
             managing_department=department,
+            status=ProgramStatus.PUBLISHED,
+        )
+        self.stdout.write(f"  Created TrainingProgram: {program}")
+        return program
+
+    def _create_version(self, program, general_info=None):
+        """Create a default TrainingProgramVersion for the program."""
+        general_info = general_info or {}
+        version = TrainingProgramVersion.objects.create(
+            program=program,
+            academic_year="2025-2026",
+            status=VersionStatus.ACTIVE,
             total_credits=general_info.get("total_credits", 125),
             training_duration=general_info.get("training_duration", "4 năm"),
             general_objective=general_info.get("general_objective", ""),
             admission_requirements=general_info.get("admission_requirements", ""),
             graduation_requirements=general_info.get("graduation_requirements", ""),
             career_opportunities=general_info.get("career_opportunities", ""),
-            status=ProgramStatus.PUBLISHED,
-        )
-        self.stdout.write(f"  Created TrainingProgram: {program}")
-        return program
-
-    def _create_version(self, program):
-        """Create a default TrainingProgramVersion for the program."""
-        version = TrainingProgramVersion.objects.create(
-            program=program,
-            academic_year="2025-2026",
-            status=VersionStatus.ACTIVE,
         )
         self.stdout.write(f"  Created TrainingProgramVersion: {version.academic_year}")
         return version

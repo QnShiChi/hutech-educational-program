@@ -36,8 +36,6 @@ class TrainingProgramFactory(DjangoModelFactory):
     degree_name = factory.LazyAttribute(lambda obj: f"Cử nhân {obj.program_name_vi}")
     education_level = "DAI_HOC"
     managing_department = factory.SubFactory(DepartmentFactory)
-    total_credits = 125
-    training_duration = "4 năm"
     status = ProgramStatus.DRAFT
     created_by = factory.SubFactory(UserFactory)
 
@@ -50,6 +48,8 @@ class TrainingProgramVersionFactory(DjangoModelFactory):
     program = factory.SubFactory(TrainingProgramFactory)
     academic_year = factory.Sequence(lambda n: f"{2024 + n}-{2025 + n}")
     status = VersionStatus.DRAFT
+    total_credits = 125
+    training_duration = "4 năm"
 
 
 

@@ -109,6 +109,12 @@ class TrainingProgramViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 {"detail": "Chỉ có thể xóa CTĐT ở trạng thái Bản nháp."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        # Block if program has ACTIVE version
+        if instance.versions.filter(status=VersionStatus.ACTIVE).exists():
+            return Response(
+                {"detail": "Không thể xóa CTĐT đang có phiên bản được áp dụng."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return super().destroy(request, *args, **kwargs)
 
 
@@ -966,6 +972,15 @@ class TrainingProgramVersionViewSet(viewsets.ModelViewSet):
         return TrainingProgramVersion.objects.filter(
             program_id=self.kwargs["program_pk"]
         ).order_by('-academic_year')
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        if instance.status == VersionStatus.ACTIVE:
+            return Response(
+                {"detail": "Không thể xóa phiên bản đang được áp dụng. Hãy chuyển sang phiên bản khác trước."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return super().destroy(request, *args, **kwargs)
 
     def perform_create(self, serializer):
         program = _get_program(self)

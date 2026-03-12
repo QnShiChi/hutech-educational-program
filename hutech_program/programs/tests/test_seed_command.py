@@ -45,7 +45,6 @@ class TestSeedCommand:
         program = TrainingProgram.objects.get(program_code=PROGRAM_CODE)
         assert program.program_name_vi  # Not empty
         assert program.status == ProgramStatus.PUBLISHED
-        assert program.total_credits >= 100
 
         # Department
         assert Department.objects.filter(code="KHOA_NN").exists()
@@ -53,6 +52,7 @@ class TestSeedCommand:
         # Version
         version = _get_version(program)
         assert version is not None
+        assert version.total_credits >= 100
 
         # POs
         pos = ProgramObjective.objects.filter(version=version)

@@ -114,8 +114,6 @@ class TestTrainingProgramCRUD:
             "degree_name": "Cử nhân Ngôn ngữ Trung Quốc",
             "education_level": "DAI_HOC",
             "managing_department": str(dept.pk),
-            "total_credits": 125,
-            "training_duration": "4 năm",
         }
         resp = client.post(self._url_list(), data, format="json")
         assert resp.status_code == status.HTTP_201_CREATED

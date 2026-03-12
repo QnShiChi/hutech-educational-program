@@ -43,23 +43,30 @@ class EducationLevel(models.TextChoices):
 # ────────────────────────── Models ──────────────────────────
 
 
+class TrainingMode(models.TextChoices):
+    CHINH_QUY = "CHINH_QUY", _("Chính quy")
+    TAI_CHUC = "TAI_CHUC", _("Tại chức")
+    TU_XA = "TU_XA", _("Từ xa")
+
+
 class TrainingProgram(BaseModel):
     """
     Chương trình đào tạo (CTĐT).
+    Chứa các trường định danh chung cho tất cả phiên bản.
     """
 
-    # Thông tin chung
+    # Thông tin định danh
     program_name_vi = models.CharField(
-        max_length=300, verbose_name=_("Tên chương trình (VN)")
+        max_length=300, verbose_name=_("Tên ngành đào tạo (VN)")
     )
     program_name_en = models.CharField(
-        max_length=300, blank=True, verbose_name=_("Tên chương trình (EN)")
+        max_length=300, blank=True, verbose_name=_("Tên ngành đào tạo (EN)")
     )
     program_code = models.CharField(
-        max_length=20, unique=True, verbose_name=_("Mã chương trình")
+        max_length=20, unique=True, verbose_name=_("Mã ngành")
     )
     degree_name = models.CharField(
-        max_length=200, verbose_name=_("Tên bằng cấp")
+        max_length=200, verbose_name=_("Tên gọi văn bằng")
     )
     education_level = models.CharField(
         max_length=20,
@@ -71,54 +78,18 @@ class TrainingProgram(BaseModel):
         "rbac.Department",
         on_delete=models.PROTECT,
         related_name="training_programs",
-        verbose_name=_("Khoa quản lý"),
-    )
-
-    # Tín chỉ & thời gian
-    total_credits = models.PositiveIntegerField(
-        default=0, verbose_name=_("Tổng số tín chỉ")
-    )
-    training_duration = models.CharField(
-        max_length=50, default="4 năm", verbose_name=_("Thời gian đào tạo")
-    )
-
-    # Văn bản pháp lý
-    decision_number = models.CharField(
-        max_length=100, blank=True, verbose_name=_("Số quyết định")
-    )
-    decision_date = models.DateField(
-        null=True, blank=True, verbose_name=_("Ngày quyết định")
+        verbose_name=_("Đơn vị quản lý"),
     )
     issuing_institution = models.CharField(
         max_length=200,
         default="Trường Đại học Công nghệ TP.HCM",
-        verbose_name=_("Nơi ban hành"),
+        verbose_name=_("Trường cấp bằng"),
     )
-
-    # Nội dung mô tả
-    general_objective = models.TextField(
-        blank=True, verbose_name=_("Mục tiêu chung")
-    )
-    admission_requirements = models.TextField(
-        blank=True, verbose_name=_("Điều kiện tuyển sinh")
-    )
-    graduation_requirements = models.TextField(
-        blank=True, verbose_name=_("Điều kiện tốt nghiệp")
-    )
-    career_opportunities = models.TextField(
-        blank=True, verbose_name=_("Vị trí việc làm")
-    )
-    further_education = models.TextField(
-        blank=True, verbose_name=_("Khả năng học tập nâng cao")
-    )
-    teaching_methodology = models.TextField(
-        blank=True, verbose_name=_("Phương pháp giảng dạy")
-    )
-    assessment_methodology = models.TextField(
-        blank=True, verbose_name=_("Phương pháp đánh giá")
-    )
-    implementation_guide = models.TextField(
-        blank=True, verbose_name=_("Hướng dẫn thực hiện")
+    training_mode = models.CharField(
+        max_length=20,
+        choices=TrainingMode.choices,
+        default=TrainingMode.CHINH_QUY,
+        verbose_name=_("Hình thức đào tạo"),
     )
 
     # Status & versioning
@@ -189,6 +160,7 @@ class TrainingProgram(BaseModel):
 class TrainingProgramVersion(BaseModel):
     """
     Phiên bản Chương trình đào tạo theo năm học.
+    Chứa tất cả nội dung mô tả có thể thay đổi giữa các phiên bản.
     """
 
     program = models.ForeignKey(
@@ -207,6 +179,63 @@ class TrainingProgramVersion(BaseModel):
         verbose_name=_("Trạng thái"),
     )
 
+    # ── Tín chỉ & thời gian ──
+    total_credits = models.PositiveIntegerField(
+        default=0, verbose_name=_("Số tín chỉ")
+    )
+    training_duration = models.CharField(
+        max_length=50, default="4 năm", verbose_name=_("Thời gian đào tạo")
+    )
+
+    # ── Văn bản pháp lý ──
+    decision_number = models.CharField(
+        max_length=100, blank=True, verbose_name=_("Số quyết định")
+    )
+    decision_date = models.DateField(
+        null=True, blank=True, verbose_name=_("Ngày quyết định")
+    )
+
+    # ── Nội dung mô tả (theo văn bản CTĐT) ──
+    general_objective = models.TextField(
+        blank=True, verbose_name=_("Mục tiêu chung")
+    )
+    admission_requirements = models.TextField(
+        blank=True, verbose_name=_("Chuẩn đầu vào")
+    )
+    admission_target = models.TextField(
+        blank=True, verbose_name=_("Đối tượng tuyển sinh")
+    )
+    admission_criteria = models.TextField(
+        blank=True, verbose_name=_("Tiêu chí tuyển sinh")
+    )
+    graduation_requirements = models.TextField(
+        blank=True, verbose_name=_("Điều kiện tốt nghiệp")
+    )
+    career_opportunities = models.TextField(
+        blank=True, verbose_name=_("Vị trí việc làm")
+    )
+    further_education = models.TextField(
+        blank=True, verbose_name=_("Học tập nâng cao trình độ")
+    )
+    teaching_methodology = models.TextField(
+        blank=True, verbose_name=_("Phương pháp giảng dạy")
+    )
+    assessment_methodology = models.TextField(
+        blank=True, verbose_name=_("Thang điểm đánh giá và cách thức đánh giá")
+    )
+    implementation_guide = models.TextField(
+        blank=True, verbose_name=_("Hướng dẫn thực hiện")
+    )
+    reference_programs = models.TextField(
+        blank=True, verbose_name=_("Chương trình tham khảo khi xây dựng")
+    )
+    description_update_period = models.TextField(
+        blank=True, verbose_name=_("Thời gian cập nhật bản mô tả CTĐT")
+    )
+    training_process = models.TextField(
+        blank=True, verbose_name=_("Quy trình đào tạo")
+    )
+
     class Meta:
         verbose_name = _("Phiên bản CTĐT")
         verbose_name_plural = _("Phiên bản CTĐT")
@@ -219,6 +248,15 @@ class TrainingProgramVersion(BaseModel):
     @property
     def is_editable(self) -> bool:
         return self.status == VersionStatus.DRAFT
+
+    def delete(self, *args, **kwargs):
+        if self.status == VersionStatus.ACTIVE:
+            from django.core.exceptions import ValidationError
+            raise ValidationError(
+                "Không thể xóa phiên bản đang được áp dụng. "
+                "Hãy chuyển sang phiên bản khác trước."
+            )
+        return super().delete(*args, **kwargs)
 
 
 class ProgramObjective(BaseModel):
