@@ -128,6 +128,27 @@ program_nested = [
         "plo-coverage-validation/",
         views.PLOCoverageValidationView.as_view({"get": "retrieve"}),
     ),
+    # Versions
+    path(
+        "versions/",
+        views.TrainingProgramVersionViewSet.as_view(
+            {"get": "list", "post": "create"}
+        ),
+    ),
+    path(
+        "versions/<uuid:pk>/",
+        views.TrainingProgramVersionViewSet.as_view(
+            {"get": "retrieve", "put": "update", "patch": "partial_update", "delete": "destroy"}
+        ),
+    ),
+    path(
+        "versions/<uuid:pk>/clone/",
+        views.TrainingProgramVersionViewSet.as_view({"post": "clone"}),
+    ),
+    path(
+        "versions/<uuid:pk>/set-active/",
+        views.TrainingProgramVersionViewSet.as_view({"post": "set_active"}),
+    ),
 ]
 
 urlpatterns = [

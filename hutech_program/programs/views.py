@@ -5,7 +5,7 @@ CTĐT ViewSets.
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters, mixins, status, viewsets
+from rest_framework import filters, mixins, serializers as drf_serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -28,6 +28,8 @@ from .models import (
     ProgramStatus,
     SemesterPlan,
     TrainingProgram,
+    TrainingProgramVersion,
+    VersionStatus,
 )
 from .serializers import (
     CourseCreateUpdateSerializer,
@@ -53,7 +55,9 @@ from .serializers import (
     TrainingProgramCreateUpdateSerializer,
     TrainingProgramDetailSerializer,
     TrainingProgramListSerializer,
+    TrainingProgramVersionSerializer,
 )
+from .services.versioning import clone_program_version
 
 
 class TrainingProgramViewSet(AuditLogMixin, viewsets.ModelViewSet):
@@ -61,7 +65,7 @@ class TrainingProgramViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
     queryset = TrainingProgram.objects.select_related(
         "managing_department", "created_by"
-    ).prefetch_related("objectives", "plos")
+    ).prefetch_related("versions")
     permission_classes = [IsAuthenticated, DepartmentScopedPermission]
     permission_map = {
         "list": "programs.view",
@@ -113,6 +117,19 @@ def _get_program(view):
     return get_object_or_404(TrainingProgram, pk=view.kwargs["program_pk"])
 
 
+def _get_version(view):
+    """Get version from ?version= query param, or the program's latest version."""
+    program = _get_program(view)
+    version_id = view.request.query_params.get("version")
+    if version_id:
+        return get_object_or_404(TrainingProgramVersion, pk=version_id, program=program)
+    # Default: ACTIVE version, or latest by academic_year
+    version = program.versions.filter(status=VersionStatus.ACTIVE).first()
+    if not version:
+        version = program.versions.order_by('-academic_year').first()
+    return version
+
+
 def _check_editable(program):
     """Raise 400 if program is not editable."""
     if not program.is_editable:
@@ -139,14 +156,20 @@ class ProgramObjectiveViewSet(AuditLogMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        return ProgramObjective.objects.filter(program_id=self.kwargs["program_pk"])
+        version = _get_version(self)
+        if version:
+            return ProgramObjective.objects.filter(version=version)
+        return ProgramObjective.objects.none()
 
     def perform_create(self, serializer):
-        program = _get_program(self)
+        version = _get_version(self)
+        if not version:
+            raise drf_serializers.ValidationError("Không tìm thấy phiên bản CTĐT.")
+        program = version.program
         err = _check_editable(program)
         if err:
-            raise serializers.ValidationError("CTĐT không ở trạng thái cho phép sửa.")
-        instance = serializer.save(program=program)
+            raise drf_serializers.ValidationError("CTĐT không ở trạng thái cho phép sửa.")
+        instance = serializer.save(version=version)
         self._create_audit_log(
             self.request, "CREATE", instance,
             new_data=self._serialize_instance(instance),
@@ -154,11 +177,12 @@ class ProgramObjectiveViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"])
     def reorder(self, request, program_pk=None):
+        version = _get_version(self)
         ser = ReorderSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         for idx, item_id in enumerate(ser.validated_data["ordered_ids"]):
             ProgramObjective.objects.filter(
-                pk=item_id, program_id=program_pk
+                pk=item_id, version=version
             ).update(order_index=idx)
         return Response({"status": "ok"})
 
@@ -179,13 +203,18 @@ class PLOViewSet(AuditLogMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        return ProgramLearningOutcome.objects.filter(
-            program_id=self.kwargs["program_pk"]
-        ).prefetch_related("objectives")
+        version = _get_version(self)
+        if version:
+            return ProgramLearningOutcome.objects.filter(
+                version=version
+            ).prefetch_related("objectives")
+        return ProgramLearningOutcome.objects.none()
 
     def perform_create(self, serializer):
-        program = _get_program(self)
-        instance = serializer.save(program=program)
+        version = _get_version(self)
+        if not version:
+            raise drf_serializers.ValidationError("Không tìm thấy phiên bản CTĐT.")
+        instance = serializer.save(version=version)
         self._create_audit_log(
             self.request, "CREATE", instance,
             new_data=self._serialize_instance(instance),
@@ -193,11 +222,12 @@ class PLOViewSet(AuditLogMixin, viewsets.ModelViewSet):
 
     @action(detail=False, methods=["post"])
     def reorder(self, request, program_pk=None):
+        version = _get_version(self)
         ser = ReorderSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
         for idx, item_id in enumerate(ser.validated_data["ordered_ids"]):
             ProgramLearningOutcome.objects.filter(
-                pk=item_id, program_id=program_pk
+                pk=item_id, version=version
             ).update(order_index=idx)
         return Response({"status": "ok"})
 
@@ -212,9 +242,11 @@ class POPLOMatrixView(viewsets.ViewSet):
     }
 
     def retrieve(self, request, program_pk=None):
-        program = get_object_or_404(TrainingProgram, pk=program_pk)
+        version = _get_version(self)
+        if not version:
+            return Response({"mappings": []})
         mappings = PLOPOMapping.objects.filter(
-            plo__program=program
+            plo__version=version
         ).select_related("plo", "po")
         data = [
             {"plo_id": str(m.plo_id), "po_id": str(m.po_id), "plo_code": m.plo.code, "po_code": m.po.code}
@@ -230,11 +262,18 @@ class POPLOMatrixView(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        version = _get_version(self)
+        if not version:
+            return Response(
+                {"detail": "Không tìm thấy phiên bản CTĐT."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         ser = POPLOMatrixSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
-        # Delete existing mappings for this program
-        PLOPOMapping.objects.filter(plo__program=program).delete()
+        # Delete existing mappings for this version
+        PLOPOMapping.objects.filter(plo__version=version).delete()
 
         # Create new mappings
         for m in ser.validated_data["mappings"]:
@@ -261,16 +300,16 @@ class PerformanceIndicatorViewSet(AuditLogMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        return PerformanceIndicator.objects.filter(
-            plo_id=self.kwargs["plo_pk"],
-            plo__program_id=self.kwargs["program_pk"],
+        plo = get_object_or_404(
+            ProgramLearningOutcome,
+            pk=self.kwargs["plo_pk"],
         )
+        return PerformanceIndicator.objects.filter(plo=plo)
 
     def perform_create(self, serializer):
         plo = get_object_or_404(
             ProgramLearningOutcome,
             pk=self.kwargs["plo_pk"],
-            program_id=self.kwargs["program_pk"],
         )
         instance = serializer.save(plo=plo)
         self._create_audit_log(
@@ -293,7 +332,8 @@ class KnowledgeBlockViewSet(AuditLogMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        qs = KnowledgeBlock.objects.filter(program_id=self.kwargs["program_pk"])
+        version = _get_version(self)
+        qs = KnowledgeBlock.objects.filter(version=version)
         # For list, only show root nodes (tree)
         if self.action == "list":
             return qs.filter(parent__isnull=True)
@@ -307,8 +347,8 @@ class KnowledgeBlockViewSet(AuditLogMixin, viewsets.ModelViewSet):
         return KnowledgeBlockSerializer
 
     def perform_create(self, serializer):
-        program = _get_program(self)
-        instance = serializer.save(program=program)
+        version = _get_version(self)
+        instance = serializer.save(version=version)
         self._create_audit_log(
             self.request, "CREATE", instance,
             new_data=self._serialize_instance(instance),
@@ -387,12 +427,13 @@ class CourseViewSet(AuditLogMixin, viewsets.ModelViewSet):
         non_draft_usages = ProgramCourse.objects.filter(
             course=instance
         ).exclude(
-            program__status=ProgramStatus.DRAFT
-        ).select_related("program")
+            version__program__status=ProgramStatus.DRAFT
+        ).select_related("version__program")
 
         if non_draft_usages.exists():
             program_codes = ", ".join(
-                pc.program.program_code for pc in non_draft_usages[:5]
+                pc.version.program.program_code for pc in non_draft_usages[:5]
+                if pc.version and pc.version.program
             )
             return Response(
                 {
@@ -432,8 +473,9 @@ class ProgramCourseViewSet(AuditLogMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
+        version = _get_version(self)
         return ProgramCourse.objects.filter(
-            program_id=self.kwargs["program_pk"]
+            version=version
         ).select_related(
             "course", "knowledge_block"
         ).prefetch_related("prerequisites__prerequisite_course")
@@ -444,7 +486,8 @@ class ProgramCourseViewSet(AuditLogMixin, viewsets.ModelViewSet):
         if err:
             from rest_framework import serializers as drf_ser
             raise drf_ser.ValidationError("CTĐT không ở trạng thái cho phép sửa.")
-        instance = serializer.save(program=program)
+        version = _get_version(self)
+        instance = serializer.save(version=version)
         self._create_audit_log(
             self.request, "CREATE", instance,
             new_data=self._serialize_instance(instance),
@@ -460,6 +503,13 @@ class ProgramCourseViewSet(AuditLogMixin, viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        version = _get_version(self)
+        if not version:
+            return Response(
+                {"detail": "Kh\u00f4ng t\u00ecm th\u1ea5y phi\u00ean b\u1ea3n CT\u0110T."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         ser = ProgramCourseBulkSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
@@ -467,7 +517,7 @@ class ProgramCourseViewSet(AuditLogMixin, viewsets.ModelViewSet):
         with transaction.atomic():
             for item in ser.validated_data["courses"]:
                 pc, was_created = ProgramCourse.objects.get_or_create(
-                    program=program,
+                    version=version,
                     course_id=item["course"],
                     defaults={
                         "knowledge_block_id": item.get("knowledge_block"),
@@ -497,8 +547,9 @@ class PrerequisiteView(viewsets.ViewSet):
 
     def retrieve(self, request, program_pk=None):
         program = get_object_or_404(TrainingProgram, pk=program_pk)
+        version = _get_version(self)
         prereqs = CoursePrerequisite.objects.filter(
-            program_course__program=program
+            program_course__version=version
         ).select_related(
             "program_course__course", "prerequisite_course"
         )
@@ -524,13 +575,14 @@ class PrerequisiteView(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        version = _get_version(self)
         ser = PrerequisiteMatrixSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
         with transaction.atomic():
-            # Delete existing prerequisites for this program
+            # Delete existing prerequisites for this version
             CoursePrerequisite.objects.filter(
-                program_course__program=program
+                program_course__version=version
             ).delete()
 
             # Create new prerequisites
@@ -538,14 +590,14 @@ class PrerequisiteView(viewsets.ViewSet):
                 pc = get_object_or_404(
                     ProgramCourse,
                     pk=item["program_course_id"],
-                    program=program,
+                    version=version,
                 )
                 # Validate semester ordering for PREREQUISITE type
                 prereq_type = item.get("type", "PREREQUISITE")
                 if prereq_type == "PREREQUISITE" and pc.semester:
                     # Find the prerequisite course's semester in this program
                     prereq_pc = ProgramCourse.objects.filter(
-                        program=program,
+                        version=version,
                         course_id=item["prerequisite_course_id"],
                     ).first()
                     if prereq_pc and prereq_pc.semester and prereq_pc.semester >= pc.semester:
@@ -580,8 +632,9 @@ class SemesterPlanView(viewsets.ViewSet):
 
     def retrieve(self, request, program_pk=None):
         program = get_object_or_404(TrainingProgram, pk=program_pk)
+        version = _get_version(self)
         plans = SemesterPlan.objects.filter(
-            program=program
+            version=version
         ).select_related(
             "program_course__course"
         ).order_by("semester_number", "order_index")
@@ -610,19 +663,20 @@ class SemesterPlanView(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        version = _get_version(self)
         ser = SemesterPlanBulkSerializer(data=request.data)
         ser.is_valid(raise_exception=True)
 
         with transaction.atomic():
             # Delete existing plan
-            SemesterPlan.objects.filter(program=program).delete()
+            SemesterPlan.objects.filter(version=version).delete()
 
             # Create new plan
             count = 0
             for sem in ser.validated_data["semesters"]:
                 for course_item in sem["courses"]:
                     SemesterPlan.objects.create(
-                        program=program,
+                        version=version,
                         semester_number=sem["semester_number"],
                         program_course_id=course_item["program_course_id"],
                         order_index=course_item.get("order_index", 0),
@@ -647,10 +701,13 @@ class CoursePLOMatrixView(viewsets.ViewSet):
     def retrieve(self, request, program_pk=None):
         """GET returns pivot format: {columns, rows}."""
         program = get_object_or_404(TrainingProgram, pk=program_pk)
+        version = _get_version(self)
+        if not version:
+            return Response({"columns": [], "rows": []})
 
         # Build columns: PIs grouped by PLO
         plos = (
-            ProgramLearningOutcome.objects.filter(program=program)
+            ProgramLearningOutcome.objects.filter(version=version)
             .prefetch_related("performance_indicators")
             .order_by("order_index")
         )
@@ -671,7 +728,7 @@ class CoursePLOMatrixView(viewsets.ViewSet):
 
         # Build rows: courses with contribution cells
         program_courses = (
-            ProgramCourse.objects.filter(program=program)
+            ProgramCourse.objects.filter(version=version)
             .select_related("course")
             .order_by("order_number")
         )
@@ -679,7 +736,7 @@ class CoursePLOMatrixView(viewsets.ViewSet):
         # Fetch all contributions in one query
         contributions = {}
         for c in CoursePLOContribution.objects.filter(
-            program_course__program=program
+            program_course__version=version
         ).values("program_course_id", "pi_id", "contribution_level"):
             contributions[(c["program_course_id"], c["pi_id"])] = c["contribution_level"]
 
@@ -704,7 +761,14 @@ class CoursePLOMatrixView(viewsets.ViewSet):
         program = get_object_or_404(TrainingProgram, pk=program_pk)
         if not program.is_editable:
             return Response(
-                {"detail": "CT\u0110T kh\u00f4ng \u1edf tr\u1ea1ng th\u00e1i cho ph\u00e9p s\u1eeda."},
+                {"detail": "CTĐT không ở trạng thái cho phép sửa."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        version = _get_version(self)
+        if not version:
+            return Response(
+                {"detail": "Không tìm thấy phiên bản CTĐT."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -712,9 +776,9 @@ class CoursePLOMatrixView(viewsets.ViewSet):
         ser.is_valid(raise_exception=True)
 
         with transaction.atomic():
-            # Delete all existing contributions for this program
+            # Delete all existing contributions for this version
             CoursePLOContribution.objects.filter(
-                program_course__program=program
+                program_course__version=version
             ).delete()
 
             # Bulk create new contributions (only non-zero levels)
@@ -751,15 +815,20 @@ class PLOAssessmentPlanViewSet(AuditLogMixin, viewsets.ModelViewSet):
     }
 
     def get_queryset(self):
-        return PLOAssessmentPlan.objects.filter(
-            program_id=self.kwargs["program_pk"]
-        ).select_related("pi__plo", "sample_course").order_by(
-            "pi__plo__order_index", "pi__order_index"
-        )
+        version = _get_version(self)
+        if version:
+            return PLOAssessmentPlan.objects.filter(
+                version=version
+            ).select_related("pi__plo", "sample_course").order_by(
+                "pi__plo__order_index", "pi__order_index"
+            )
+        return PLOAssessmentPlan.objects.none()
 
     def perform_create(self, serializer):
-        program = _get_program(self)
-        instance = serializer.save(program=program)
+        version = _get_version(self)
+        if not version:
+            raise drf_serializers.ValidationError("Không tìm thấy phiên bản CTĐT.")
+        instance = serializer.save(version=version)
         self._create_audit_log(
             self.request, "CREATE", instance,
             new_data=self._serialize_instance(instance),
@@ -771,7 +840,14 @@ class PLOAssessmentPlanViewSet(AuditLogMixin, viewsets.ModelViewSet):
         program = get_object_or_404(TrainingProgram, pk=program_pk)
         if not program.is_editable:
             return Response(
-                {"detail": "CT\u0110T kh\u00f4ng \u1edf tr\u1ea1ng th\u00e1i cho ph\u00e9p s\u1eeda."},
+                {"detail": "CTĐT không ở trạng thái cho phép sửa."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        version = _get_version(self)
+        if not version:
+            return Response(
+                {"detail": "Không tìm thấy phiên bản CTĐT."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -797,7 +873,7 @@ class PLOAssessmentPlanViewSet(AuditLogMixin, viewsets.ModelViewSet):
                     )
                 }
                 _, was_created = PLOAssessmentPlan.objects.update_or_create(
-                    program=program,
+                    version=version,
                     pi_id=pi_id,
                     defaults=defaults,
                 )
@@ -823,9 +899,16 @@ class PLOCoverageValidationView(viewsets.ViewSet):
 
     def retrieve(self, request, program_pk=None):
         program = get_object_or_404(TrainingProgram, pk=program_pk)
+        version = _get_version(self)
+        if not version:
+            return Response({
+                "program_id": str(program.id),
+                "all_covered": True,
+                "plos": [],
+            })
 
         plos = (
-            ProgramLearningOutcome.objects.filter(program=program)
+            ProgramLearningOutcome.objects.filter(version=version)
             .prefetch_related("performance_indicators")
             .order_by("order_index")
         )
@@ -833,7 +916,7 @@ class PLOCoverageValidationView(viewsets.ViewSet):
         # Collect all PI IDs that have at least one contribution > 0
         covered_pis = set(
             CoursePLOContribution.objects.filter(
-                program_course__program=program,
+                program_course__version=version,
                 contribution_level__gt=0,
             ).values_list("pi_id", flat=True)
         )
@@ -861,4 +944,81 @@ class PLOCoverageValidationView(viewsets.ViewSet):
             "all_covered": all_covered,
             "plos": results,
         })
+
+
+class TrainingProgramVersionViewSet(viewsets.ModelViewSet):
+    """CRUD + clone + set-active for TrainingProgramVersion."""
+
+    serializer_class = TrainingProgramVersionSerializer
+    permission_classes = [IsAuthenticated, HasModulePermission]
+    permission_map = {
+        "list": "programs.view",
+        "retrieve": "programs.view",
+        "create": "programs.edit",
+        "update": "programs.edit",
+        "partial_update": "programs.edit",
+        "destroy": "programs.edit",
+        "clone": "programs.edit",
+        "set_active": "programs.edit",
+    }
+
+    def get_queryset(self):
+        return TrainingProgramVersion.objects.filter(
+            program_id=self.kwargs["program_pk"]
+        ).order_by('-academic_year')
+
+    def perform_create(self, serializer):
+        program = _get_program(self)
+        serializer.save(
+            program=program,
+            created_by=self.request.user,
+            last_modified_by=self.request.user,
+        )
+
+    @action(detail=True, methods=["post"])
+    def clone(self, request, program_pk=None, pk=None):
+        """POST /programs/{program_pk}/versions/{pk}/clone/ — clone a version."""
+        source_version = get_object_or_404(
+            TrainingProgramVersion, pk=pk, program_id=program_pk
+        )
+        academic_year = request.data.get("academic_year")
+        if not academic_year:
+            return Response(
+                {"detail": "Vui lòng nhập năm học mới (academic_year)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if version with this academic year already exists
+        if TrainingProgramVersion.objects.filter(
+            program_id=program_pk, academic_year=academic_year
+        ).exists():
+            return Response(
+                {"detail": f"Phiên bản năm học '{academic_year}' đã tồn tại."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_version = clone_program_version(
+            source_version, academic_year, user=request.user
+        )
+        serializer = self.get_serializer(new_version)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=["post"], url_path="set-active")
+    def set_active(self, request, program_pk=None, pk=None):
+        """POST /programs/{program_pk}/versions/{pk}/set-active/ — activate a version."""
+        version = get_object_or_404(
+            TrainingProgramVersion, pk=pk, program_id=program_pk
+        )
+
+        with transaction.atomic():
+            # Deactivate all other versions for this program
+            TrainingProgramVersion.objects.filter(
+                program_id=program_pk, status=VersionStatus.ACTIVE
+            ).update(status=VersionStatus.ARCHIVED)
+
+            version.status = VersionStatus.ACTIVE
+            version.save(update_fields=["status"])
+
+        serializer = self.get_serializer(version)
+        return Response(serializer.data)
 

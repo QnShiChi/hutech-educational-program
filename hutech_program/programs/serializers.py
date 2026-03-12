@@ -19,18 +19,41 @@ from .models import (
     ProgramStatus,
     SemesterPlan,
     TrainingProgram,
+    TrainingProgramVersion,
+    VersionStatus,
 )
 
 
 # ────────────────── TrainingProgram ──────────────────
 
 
+class TrainingProgramVersionSerializer(serializers.ModelSerializer):
+    """Serializer for TrainingProgramVersion list/detail."""
+
+    po_count = serializers.IntegerField(source="objectives.count", read_only=True)
+    plo_count = serializers.IntegerField(source="plos.count", read_only=True)
+
+    class Meta:
+        model = TrainingProgramVersion
+        fields = [
+            "id",
+            "academic_year",
+            "status",
+            "po_count",
+            "plo_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
 class TrainingProgramListSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(
         source="managing_department.name", read_only=True
     )
-    po_count = serializers.IntegerField(source="objectives.count", read_only=True)
-    plo_count = serializers.IntegerField(source="plos.count", read_only=True)
+    po_count = serializers.SerializerMethodField()
+    plo_count = serializers.SerializerMethodField()
+    active_version = serializers.SerializerMethodField()
 
     class Meta:
         model = TrainingProgram
@@ -47,8 +70,32 @@ class TrainingProgramListSerializer(serializers.ModelSerializer):
             "total_credits",
             "po_count",
             "plo_count",
+            "active_version",
             "created_at",
         ]
+
+    def _get_latest_version(self, obj):
+        """Get the latest version (ACTIVE preferred, otherwise most recent)."""
+        if not hasattr(obj, '_cached_version'):
+            version = obj.versions.filter(status=VersionStatus.ACTIVE).first()
+            if not version:
+                version = obj.versions.order_by('-academic_year').first()
+            obj._cached_version = version
+        return obj._cached_version
+
+    def get_po_count(self, obj):
+        version = self._get_latest_version(obj)
+        return version.objectives.count() if version else 0
+
+    def get_plo_count(self, obj):
+        version = self._get_latest_version(obj)
+        return version.plos.count() if version else 0
+
+    def get_active_version(self, obj):
+        version = self._get_latest_version(obj)
+        if version:
+            return {"id": str(version.id), "academic_year": version.academic_year, "status": version.status}
+        return None
 
 
 class ProgramObjectiveSerializer(serializers.ModelSerializer):
@@ -85,8 +132,9 @@ class TrainingProgramDetailSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(
         source="managing_department.name", read_only=True
     )
-    objectives = ProgramObjectiveSerializer(many=True, read_only=True)
-    plos = PLOSummarySerializer(many=True, read_only=True)
+    objectives = serializers.SerializerMethodField()
+    plos = serializers.SerializerMethodField()
+    versions = TrainingProgramVersionSerializer(many=True, read_only=True)
     created_by_name = serializers.CharField(
         source="created_by.name", read_only=True, default=None
     )
@@ -117,6 +165,7 @@ class TrainingProgramDetailSerializer(serializers.ModelSerializer):
             "implementation_guide",
             "status",
             "version",
+            "versions",
             "created_by",
             "created_by_name",
             "last_modified_by",
@@ -125,6 +174,28 @@ class TrainingProgramDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def _get_version(self, obj):
+        """Get the version from context or latest."""
+        version_id = self.context.get('version_id')
+        if version_id:
+            return obj.versions.filter(pk=version_id).first()
+        version = obj.versions.filter(status=VersionStatus.ACTIVE).first()
+        if not version:
+            version = obj.versions.order_by('-academic_year').first()
+        return version
+
+    def get_objectives(self, obj):
+        version = self._get_version(obj)
+        if version:
+            return ProgramObjectiveSerializer(version.objectives.all(), many=True).data
+        return []
+
+    def get_plos(self, obj):
+        version = self._get_version(obj)
+        if version:
+            return PLOSummarySerializer(version.plos.all(), many=True).data
+        return []
 
 
 class TrainingProgramCreateUpdateSerializer(serializers.ModelSerializer):
@@ -381,18 +452,20 @@ class CourseCreateUpdateSerializer(serializers.ModelSerializer):
 class CourseUsageSerializer(serializers.ModelSerializer):
     """Shows which programs use a course."""
 
-    program_code = serializers.CharField(source="program.program_code", read_only=True)
-    program_name = serializers.CharField(source="program.program_name_vi", read_only=True)
-    program_status = serializers.CharField(source="program.status", read_only=True)
+    program_code = serializers.CharField(source="version.program.program_code", read_only=True)
+    program_name = serializers.CharField(source="version.program.program_name_vi", read_only=True)
+    program_status = serializers.CharField(source="version.program.status", read_only=True)
+    academic_year = serializers.CharField(source="version.academic_year", read_only=True)
 
     class Meta:
         model = ProgramCourse
         fields = [
             "id",
-            "program",
+            "version",
             "program_code",
             "program_name",
             "program_status",
+            "academic_year",
             "knowledge_block",
             "semester",
             "is_required",

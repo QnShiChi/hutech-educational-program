@@ -20,6 +20,8 @@ from hutech_program.programs.models import (
     ProgramStatus,
     SemesterPlan,
     TrainingProgram,
+    TrainingProgramVersion,
+    VersionStatus,
 )
 from hutech_program.rbac.tests.factories import DepartmentFactory, UserFactory
 
@@ -40,11 +42,22 @@ class TrainingProgramFactory(DjangoModelFactory):
     created_by = factory.SubFactory(UserFactory)
 
 
+
+class TrainingProgramVersionFactory(DjangoModelFactory):
+    class Meta:
+        model = TrainingProgramVersion
+
+    program = factory.SubFactory(TrainingProgramFactory)
+    academic_year = factory.Sequence(lambda n: f"{2024 + n}-{2025 + n}")
+    status = VersionStatus.DRAFT
+
+
+
 class ProgramObjectiveFactory(DjangoModelFactory):
     class Meta:
         model = ProgramObjective
 
-    program = factory.SubFactory(TrainingProgramFactory)
+    version = factory.SubFactory(TrainingProgramVersionFactory)
     code = factory.Sequence(lambda n: f"PO{n}")
     description = factory.Faker("sentence")
     order_index = factory.Sequence(lambda n: n)
@@ -54,7 +67,7 @@ class ProgramLearningOutcomeFactory(DjangoModelFactory):
     class Meta:
         model = ProgramLearningOutcome
 
-    program = factory.SubFactory(TrainingProgramFactory)
+    version = factory.SubFactory(TrainingProgramVersionFactory)
     code = factory.Sequence(lambda n: f"PLO{n}")
     description = factory.Faker("sentence")
     competency_level = factory.Faker("pydecimal", left_digits=1, right_digits=1, min_value=0, max_value=6)
@@ -84,7 +97,7 @@ class KnowledgeBlockFactory(DjangoModelFactory):
     class Meta:
         model = KnowledgeBlock
 
-    program = factory.SubFactory(TrainingProgramFactory)
+    version = factory.SubFactory(TrainingProgramVersionFactory)
     name = factory.Sequence(lambda n: f"Khối kiến thức {n}")
     parent = None
     required_credits = 20
@@ -125,11 +138,11 @@ class ProgramCourseFactory(DjangoModelFactory):
     class Meta:
         model = ProgramCourse
 
-    program = factory.SubFactory(TrainingProgramFactory)
+    version = factory.SubFactory(TrainingProgramVersionFactory)
     course = factory.SubFactory(CourseFactory)
     knowledge_block = factory.SubFactory(
         KnowledgeBlockFactory,
-        program=factory.SelfAttribute("..program"),
+        version=factory.SelfAttribute("..version"),
     )
     order_number = factory.Sequence(lambda n: f"I.{n:02d}")
     is_required = True
@@ -149,11 +162,11 @@ class SemesterPlanFactory(DjangoModelFactory):
     class Meta:
         model = SemesterPlan
 
-    program = factory.SubFactory(TrainingProgramFactory)
+    version = factory.SubFactory(TrainingProgramVersionFactory)
     semester_number = 1
     program_course = factory.SubFactory(
         ProgramCourseFactory,
-        program=factory.SelfAttribute("..program"),
+        version=factory.SelfAttribute("..version"),
     )
     order_index = factory.Sequence(lambda n: n)
 
@@ -174,7 +187,7 @@ class PLOAssessmentPlanFactory(DjangoModelFactory):
     class Meta:
         model = PLOAssessmentPlan
 
-    program = factory.SubFactory(TrainingProgramFactory)
+    version = factory.SubFactory(TrainingProgramVersionFactory)
     pi = factory.SubFactory(PerformanceIndicatorFactory)
     contributing_courses_text = "HP001 HP002"
     direct_evidence = "Báo cáo cuối kỳ"

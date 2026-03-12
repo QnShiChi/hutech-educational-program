@@ -29,6 +29,8 @@ from hutech_program.programs.models import (
     ProgramStatus,
     SemesterPlan,
     TrainingProgram,
+    TrainingProgramVersion,
+    VersionStatus,
 )
 from hutech_program.rbac.models import Department
 
@@ -233,24 +235,27 @@ class Command(BaseCommand):
             # Create TrainingProgram
             program = self._create_program(department, parsed.get("general_info", {}))
 
+            # Create Version
+            version = self._create_version(program)
+
             # Create POs
-            po_map = self._create_pos(program)
+            po_map = self._create_pos(version)
 
             # Create PLOs
-            plo_map = self._create_plos(program)
+            plo_map = self._create_plos(version)
 
             # Create PO-PLO Mappings
             mapping_count = self._create_plo_po_mappings(po_map, plo_map)
 
             # Create Knowledge Blocks
-            kb_map = self._create_knowledge_blocks(program, parsed.get("knowledge_blocks", []))
+            kb_map = self._create_knowledge_blocks(version, parsed.get("knowledge_blocks", []))
 
             # Create Courses
             course_map = self._create_courses(department, parsed.get("courses", []))
 
             # Create ProgramCourse (link courses to program with semester)
             pc_map = self._create_program_courses(
-                program, course_map, kb_map,
+                version, course_map, kb_map,
                 parsed.get("courses", []),
                 parsed.get("semester_plan", []),
             )
@@ -270,7 +275,7 @@ class Command(BaseCommand):
 
             # Create PLOAssessmentPlans
             assessment_count = self._create_assessment_plans(
-                program, pi_map, course_map, parsed.get("assessment_plans", [])
+                version, pi_map, course_map, parsed.get("assessment_plans", [])
             )
 
         # Print summary
@@ -330,12 +335,22 @@ class Command(BaseCommand):
         self.stdout.write(f"  Created TrainingProgram: {program}")
         return program
 
-    def _create_pos(self, program):
+    def _create_version(self, program):
+        """Create a default TrainingProgramVersion for the program."""
+        version = TrainingProgramVersion.objects.create(
+            program=program,
+            academic_year="2025-2026",
+            status=VersionStatus.ACTIVE,
+        )
+        self.stdout.write(f"  Created TrainingProgramVersion: {version.academic_year}")
+        return version
+
+    def _create_pos(self, version):
         """Create ProgramObjective records. Returns {code: obj}."""
         po_map = {}
         for data in PO_DATA:
             po = ProgramObjective.objects.create(
-                program=program,
+                version=version,
                 code=data["code"],
                 description=data["description"],
                 order_index=data["order_index"],
@@ -344,12 +359,12 @@ class Command(BaseCommand):
         self.stdout.write(f"  Created {len(po_map)} POs")
         return po_map
 
-    def _create_plos(self, program):
+    def _create_plos(self, version):
         """Create ProgramLearningOutcome records. Returns {code: obj}."""
         plo_map = {}
         for data in PLO_DATA:
             plo = ProgramLearningOutcome.objects.create(
-                program=program,
+                version=version,
                 code=data["code"],
                 description=data["description"],
                 competency_level=data["competency_level"],
@@ -376,13 +391,13 @@ class Command(BaseCommand):
         self.stdout.write(f"  Created {count} PO-PLO mappings")
         return count
 
-    def _create_knowledge_blocks(self, program, parsed_blocks):
+    def _create_knowledge_blocks(self, version, parsed_blocks):
         """Create KnowledgeBlock records with hierarchy. Returns {name: obj}."""
         kb_map = {}
 
         if not parsed_blocks:
             # Fallback: hardcode if parser did not extract
-            self._create_hardcoded_knowledge_blocks(program, kb_map)
+            self._create_hardcoded_knowledge_blocks(version, kb_map)
             return kb_map
 
         # Determine parent-child from indentation or naming pattern
@@ -403,7 +418,7 @@ class Command(BaseCommand):
 
             if is_parent:
                 kb = KnowledgeBlock(
-                    program=program,
+                    version=version,
                     name=name,
                     parent=None,
                     required_credits=required_credits,
@@ -415,7 +430,7 @@ class Command(BaseCommand):
                 kb_map[name] = kb
             else:
                 kb = KnowledgeBlock(
-                    program=program,
+                    version=version,
                     name=name,
                     parent=current_parent,
                     required_credits=required_credits,
@@ -428,10 +443,10 @@ class Command(BaseCommand):
         self.stdout.write(f"  Created {len(kb_map)} KnowledgeBlocks")
         return kb_map
 
-    def _create_hardcoded_knowledge_blocks(self, program, kb_map):
+    def _create_hardcoded_knowledge_blocks(self, version, kb_map):
         """Fallback hardcoded knowledge blocks."""
         parent1 = KnowledgeBlock(
-            program=program,
+            version=version,
             name="Kiến thức giáo dục đại cương",
             required_credits=33,
             elective_credits=11,
@@ -441,7 +456,7 @@ class Command(BaseCommand):
         kb_map[parent1.name] = parent1
 
         parent2 = KnowledgeBlock(
-            program=program,
+            version=version,
             name="Kiến thức giáo dục chuyên nghiệp",
             required_credits=63,
             elective_credits=18,
@@ -492,7 +507,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  Created/found {len(course_map)} Courses")
         return course_map
 
-    def _create_program_courses(self, program, course_map, kb_map, parsed_courses, semester_plan):
+    def _create_program_courses(self, version, course_map, kb_map, parsed_courses, semester_plan):
         """Create ProgramCourse records. Returns {course_code: pc_obj}."""
         pc_map = {}
 
@@ -516,7 +531,7 @@ class Command(BaseCommand):
             is_required = c_data.get("is_required", True)
 
             pc = ProgramCourse.objects.create(
-                program=program,
+                version=version,
                 course=course,
                 order_number=order_number,
                 is_required=is_required,
@@ -616,7 +631,7 @@ class Command(BaseCommand):
         self.stdout.write(f"  Created {count} CoursePLOContributions")
         return count
 
-    def _create_assessment_plans(self, program, pi_map, course_map, parsed_plans):
+    def _create_assessment_plans(self, version, pi_map, course_map, parsed_plans):
         """Create PLOAssessmentPlan records."""
         count = 0
         for plan_data in parsed_plans:
@@ -629,7 +644,7 @@ class Command(BaseCommand):
             sample_course = course_map.get(sample_course_code)
 
             PLOAssessmentPlan.objects.create(
-                program=program,
+                version=version,
                 pi=pi,
                 contributing_courses_text=plan_data.get("contributing_courses_text", ""),
                 sample_course=sample_course,

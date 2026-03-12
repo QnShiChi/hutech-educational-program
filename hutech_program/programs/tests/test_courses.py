@@ -27,6 +27,7 @@ from hutech_program.programs.tests.factories import (
     ProgramCourseFactory,
     SemesterPlanFactory,
     TrainingProgramFactory,
+    TrainingProgramVersionFactory,
 )
 from hutech_program.rbac.tests.factories import (
     DepartmentFactory,
@@ -196,7 +197,8 @@ class TestCourseCRUD:
         """GET /courses/{id}/programs/ returns programs using this course."""
         course = CourseFactory()
         program = TrainingProgramFactory()
-        ProgramCourseFactory(program=program, course=course)
+        version = TrainingProgramVersionFactory(program=program)
+        ProgramCourseFactory(version=version, course=course)
         client, _ = _auth_client()
 
         resp = client.get(f"/api/v1/programs/courses/{course.id}/programs/")
@@ -208,7 +210,8 @@ class TestCourseCRUD:
         """Cannot delete course if used in non-DRAFT program."""
         course = CourseFactory()
         program = TrainingProgramFactory(status=ProgramStatus.SUBMITTED)
-        ProgramCourseFactory(program=program, course=course)
+        version = TrainingProgramVersionFactory(program=program)
+        ProgramCourseFactory(version=version, course=course)
         client, _ = _auth_client()
 
         resp = client.delete(f"/api/v1/programs/courses/{course.id}/")
@@ -224,6 +227,7 @@ class TestProgramCourseBulkAdd:
 
     def test_bulk_add_courses(self):
         program = TrainingProgramFactory(status=ProgramStatus.DRAFT)
+        version = TrainingProgramVersionFactory(program=program)
         courses = CourseFactory.create_batch(3)
         client, _ = _auth_client()
 
@@ -243,8 +247,9 @@ class TestProgramCourseBulkAdd:
 
     def test_bulk_add_skip_duplicates(self):
         program = TrainingProgramFactory(status=ProgramStatus.DRAFT)
+        version = TrainingProgramVersionFactory(program=program)
         course = CourseFactory()
-        ProgramCourseFactory(program=program, course=course)
+        ProgramCourseFactory(version=version, course=course)
         client, _ = _auth_client()
 
         data = {
@@ -280,9 +285,10 @@ class TestPrerequisiteValidation:
 
     def test_get_prerequisites(self):
         program = TrainingProgramFactory()
-        pc = ProgramCourseFactory(program=program, semester=2)
+        version = TrainingProgramVersionFactory(program=program)
+        pc = ProgramCourseFactory(version=version, semester=2)
         prereq_course = CourseFactory()
-        ProgramCourseFactory(program=program, course=prereq_course, semester=1)
+        ProgramCourseFactory(version=version, course=prereq_course, semester=1)
         CoursePrerequisiteFactory(
             program_course=pc,
             prerequisite_course=prereq_course,
@@ -295,10 +301,11 @@ class TestPrerequisiteValidation:
 
     def test_update_prerequisites(self):
         program = TrainingProgramFactory(status=ProgramStatus.DRAFT)
+        version = TrainingProgramVersionFactory(program=program)
         course1 = CourseFactory()
         course2 = CourseFactory()
-        pc1 = ProgramCourseFactory(program=program, course=course1, semester=1)
-        pc2 = ProgramCourseFactory(program=program, course=course2, semester=2)
+        pc1 = ProgramCourseFactory(version=version, course=course1, semester=1)
+        pc2 = ProgramCourseFactory(version=version, course=course2, semester=2)
         client, _ = _auth_client()
 
         data = {
@@ -321,10 +328,11 @@ class TestPrerequisiteValidation:
     def test_prerequisite_semester_ordering_rejected(self):
         """Prerequisite in same or later semester should be rejected."""
         program = TrainingProgramFactory(status=ProgramStatus.DRAFT)
+        version = TrainingProgramVersionFactory(program=program)
         course1 = CourseFactory()
         course2 = CourseFactory()
-        pc1 = ProgramCourseFactory(program=program, course=course1, semester=2)
-        pc2 = ProgramCourseFactory(program=program, course=course2, semester=1)
+        pc1 = ProgramCourseFactory(version=version, course=course1, semester=2)
+        pc2 = ProgramCourseFactory(version=version, course=course2, semester=1)
         client, _ = _auth_client()
 
         # course1 is in semester 2, trying to set it as prerequisite of
@@ -354,10 +362,11 @@ class TestSemesterPlan:
 
     def test_get_semester_plan(self):
         program = TrainingProgramFactory()
-        pc1 = ProgramCourseFactory(program=program)
-        pc2 = ProgramCourseFactory(program=program)
-        SemesterPlanFactory(program=program, program_course=pc1, semester_number=1)
-        SemesterPlanFactory(program=program, program_course=pc2, semester_number=2)
+        version = TrainingProgramVersionFactory(program=program)
+        pc1 = ProgramCourseFactory(version=version)
+        pc2 = ProgramCourseFactory(version=version)
+        SemesterPlanFactory(version=version, program_course=pc1, semester_number=1)
+        SemesterPlanFactory(version=version, program_course=pc2, semester_number=2)
         client, _ = _auth_client()
 
         resp = client.get(f"/api/v1/programs/{program.id}/semester-plan/")
@@ -366,8 +375,9 @@ class TestSemesterPlan:
 
     def test_update_semester_plan(self):
         program = TrainingProgramFactory(status=ProgramStatus.DRAFT)
-        pc1 = ProgramCourseFactory(program=program)
-        pc2 = ProgramCourseFactory(program=program)
+        version = TrainingProgramVersionFactory(program=program)
+        pc1 = ProgramCourseFactory(version=version)
+        pc2 = ProgramCourseFactory(version=version)
         client, _ = _auth_client()
 
         data = {
@@ -417,7 +427,8 @@ class TestCourseChangeNotification:
         """Verify the signal is called when a Course is updated."""
         course = CourseFactory()
         program = TrainingProgramFactory()
-        ProgramCourseFactory(program=program, course=course)
+        version = TrainingProgramVersionFactory(program=program)
+        ProgramCourseFactory(version=version, course=course)
 
         # The signal tries to import notifications.models which may not exist
         # We patch it to verify it's called
@@ -425,7 +436,7 @@ class TestCourseChangeNotification:
             "hutech_program.programs.signals.ProgramCourse.objects"
         ) as mock_pc:
             mock_pc.filter.return_value.select_related.return_value = (
-                ProgramCourse.objects.filter(course=course).select_related("program")
+                ProgramCourse.objects.filter(course=course).select_related("version__program")
             )
             mock_pc.filter.return_value.select_related.return_value.exists.return_value = True
 
@@ -467,13 +478,14 @@ class TestProgramCourseValidation:
 
     def test_course_group_must_belong_to_knowledge_block(self):
         program = TrainingProgramFactory(status=ProgramStatus.DRAFT)
+        version = TrainingProgramVersionFactory(program=program)
         course = CourseFactory()
-        kb1 = KnowledgeBlockFactory(program=program)
-        kb2 = KnowledgeBlockFactory(program=program)
+        kb1 = KnowledgeBlockFactory(version=version)
+        kb2 = KnowledgeBlockFactory(version=version)
         cg = CourseGroupFactory(knowledge_block=kb2)
 
         pc = ProgramCourse(
-            program=program,
+            version=version,
             course=course,
             knowledge_block=kb1,
             course_group=cg,
@@ -483,12 +495,13 @@ class TestProgramCourseValidation:
 
     def test_course_group_matches_knowledge_block(self):
         program = TrainingProgramFactory(status=ProgramStatus.DRAFT)
+        version = TrainingProgramVersionFactory(program=program)
         course = CourseFactory()
-        kb = KnowledgeBlockFactory(program=program)
+        kb = KnowledgeBlockFactory(version=version)
         cg = CourseGroupFactory(knowledge_block=kb)
 
         pc = ProgramCourse(
-            program=program,
+            version=version,
             course=course,
             knowledge_block=kb,
             course_group=cg,

@@ -34,6 +34,7 @@ from .factories import (
     ProgramLearningOutcomeFactory,
     ProgramObjectiveFactory,
     TrainingProgramFactory,
+    TrainingProgramVersionFactory,
 )
 
 pytestmark = pytest.mark.django_db
@@ -74,6 +75,11 @@ def _setup_admin_user():
     admin_role = RoleFactory(code="ADMIN")
     UserRoleFactory(user=user, role=admin_role, department=dept)
     return user, dept
+
+
+def _make_version(prog):
+    """Helper to create a default version for a program."""
+    return TrainingProgramVersionFactory(program=prog, academic_year="2024-2025")
 
 
 # ════════════════════════════════════════════════════════════
@@ -121,9 +127,10 @@ class TestTrainingProgramCRUD:
     def test_retrieve_program_detail(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
+        version = _make_version(prog)
         # Add some POs and PLOs
-        ProgramObjectiveFactory.create_batch(2, program=prog)
-        ProgramLearningOutcomeFactory.create_batch(3, program=prog)
+        ProgramObjectiveFactory.create_batch(2, version=version)
+        ProgramLearningOutcomeFactory.create_batch(3, version=version)
         client = _auth_client(user)
 
         resp = client.get(self._url_detail(prog.pk))
@@ -206,7 +213,8 @@ class TestPOCRUD:
     def test_list_pos(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
-        ProgramObjectiveFactory.create_batch(3, program=prog)
+        version = _make_version(prog)
+        ProgramObjectiveFactory.create_batch(3, version=version)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/objectives/"
@@ -218,20 +226,22 @@ class TestPOCRUD:
     def test_create_po(self):
         user, dept = _setup_user_with_programs_perms()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
+        version = _make_version(prog)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/objectives/"
         data = {"code": "PO1", "description": "Mô tả mục tiêu", "order_index": 0}
         resp = client.post(url, data, format="json")
         assert resp.status_code == status.HTTP_201_CREATED
-        assert ProgramObjective.objects.filter(program=prog, code="PO1").exists()
+        assert ProgramObjective.objects.filter(version=version, code="PO1").exists()
 
     def test_reorder_pos(self):
         user, dept = _setup_user_with_programs_perms()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
-        po1 = ProgramObjectiveFactory(program=prog, code="PO1", order_index=0)
-        po2 = ProgramObjectiveFactory(program=prog, code="PO2", order_index=1)
-        po3 = ProgramObjectiveFactory(program=prog, code="PO3", order_index=2)
+        version = _make_version(prog)
+        po1 = ProgramObjectiveFactory(version=version, code="PO1", order_index=0)
+        po2 = ProgramObjectiveFactory(version=version, code="PO2", order_index=1)
+        po3 = ProgramObjectiveFactory(version=version, code="PO3", order_index=2)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/objectives/reorder/"
@@ -251,7 +261,8 @@ class TestPLOCRUD:
     def test_list_plos(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
-        ProgramLearningOutcomeFactory.create_batch(4, program=prog)
+        version = _make_version(prog)
+        ProgramLearningOutcomeFactory.create_batch(4, version=version)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/plos/"
@@ -263,6 +274,7 @@ class TestPLOCRUD:
     def test_create_plo(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
+        version = _make_version(prog)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/plos/"
@@ -279,6 +291,7 @@ class TestPLOCRUD:
     def test_plo_competency_level_validation(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
+        version = _make_version(prog)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/plos/"
@@ -294,8 +307,9 @@ class TestPLOCRUD:
     def test_reorder_plos(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
-        plo1 = ProgramLearningOutcomeFactory(program=prog, order_index=0)
-        plo2 = ProgramLearningOutcomeFactory(program=prog, order_index=1)
+        version = _make_version(prog)
+        plo1 = ProgramLearningOutcomeFactory(version=version, order_index=0)
+        plo2 = ProgramLearningOutcomeFactory(version=version, order_index=1)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/plos/reorder/"
@@ -318,8 +332,9 @@ class TestPOPLOMatrix:
     def test_get_matrix(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
-        po1 = ProgramObjectiveFactory(program=prog, code="PO1")
-        plo1 = ProgramLearningOutcomeFactory(program=prog, code="PLO1")
+        version = _make_version(prog)
+        po1 = ProgramObjectiveFactory(version=version, code="PO1")
+        plo1 = ProgramLearningOutcomeFactory(version=version, code="PLO1")
         PLOPOMappingFactory(plo=plo1, po=po1)
         client = _auth_client(user)
 
@@ -331,10 +346,11 @@ class TestPOPLOMatrix:
     def test_bulk_update_matrix(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
-        po1 = ProgramObjectiveFactory(program=prog, code="PO1")
-        po2 = ProgramObjectiveFactory(program=prog, code="PO2")
-        plo1 = ProgramLearningOutcomeFactory(program=prog, code="PLO1")
-        plo2 = ProgramLearningOutcomeFactory(program=prog, code="PLO2")
+        version = _make_version(prog)
+        po1 = ProgramObjectiveFactory(version=version, code="PO1")
+        po2 = ProgramObjectiveFactory(version=version, code="PO2")
+        plo1 = ProgramLearningOutcomeFactory(version=version, code="PLO1")
+        plo2 = ProgramLearningOutcomeFactory(version=version, code="PLO2")
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/po-plo-matrix/"
@@ -348,14 +364,15 @@ class TestPOPLOMatrix:
         resp = client.put(url, data, format="json")
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["count"] == 3
-        assert PLOPOMapping.objects.filter(plo__program=prog).count() == 3
+        assert PLOPOMapping.objects.filter(plo__version=version).count() == 3
 
     def test_matrix_replace_all(self):
         """Bulk update replaces all existing mappings."""
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
-        po1 = ProgramObjectiveFactory(program=prog, code="PO1")
-        plo1 = ProgramLearningOutcomeFactory(program=prog, code="PLO1")
+        version = _make_version(prog)
+        po1 = ProgramObjectiveFactory(version=version, code="PO1")
+        plo1 = ProgramLearningOutcomeFactory(version=version, code="PLO1")
         PLOPOMappingFactory(plo=plo1, po=po1)
         client = _auth_client(user)
 
@@ -364,7 +381,7 @@ class TestPOPLOMatrix:
         data = {"mappings": []}
         resp = client.put(url, data, format="json")
         assert resp.status_code == status.HTTP_200_OK
-        assert PLOPOMapping.objects.filter(plo__program=prog).count() == 0
+        assert PLOPOMapping.objects.filter(plo__version=version).count() == 0
 
 
 # ════════════════════════════════════════════════════════════
@@ -376,7 +393,8 @@ class TestPerformanceIndicatorCRUD:
     def test_list_pis(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = _make_version(prog)
+        plo = ProgramLearningOutcomeFactory(version=version)
         PerformanceIndicatorFactory.create_batch(3, plo=plo)
         client = _auth_client(user)
 
@@ -389,7 +407,8 @@ class TestPerformanceIndicatorCRUD:
     def test_create_pi(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = _make_version(prog)
+        plo = ProgramLearningOutcomeFactory(version=version)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/plos/{plo.pk}/pis/"
@@ -405,7 +424,8 @@ class TestPerformanceIndicatorCRUD:
     def test_update_pi(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = _make_version(prog)
+        plo = ProgramLearningOutcomeFactory(version=version)
         pi = PerformanceIndicatorFactory(plo=plo)
         client = _auth_client(user)
 
@@ -418,7 +438,8 @@ class TestPerformanceIndicatorCRUD:
     def test_delete_pi(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = _make_version(prog)
+        plo = ProgramLearningOutcomeFactory(version=version)
         pi = PerformanceIndicatorFactory(plo=plo)
         client = _auth_client(user)
 
@@ -436,8 +457,9 @@ class TestKnowledgeBlockTree:
     def test_list_returns_only_root_nodes(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
-        root = KnowledgeBlockFactory(program=prog, parent=None, name="Root")
-        KnowledgeBlockFactory(program=prog, parent=root, name="Child")
+        version = _make_version(prog)
+        root = KnowledgeBlockFactory(version=version, parent=None, name="Root")
+        KnowledgeBlockFactory(version=version, parent=root, name="Child")
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/knowledge-blocks/"
@@ -451,6 +473,7 @@ class TestKnowledgeBlockTree:
     def test_create_knowledge_block(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
+        version = _make_version(prog)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/knowledge-blocks/"
@@ -469,8 +492,9 @@ class TestKnowledgeBlockTree:
         """KnowledgeBlock.save() auto-calculates total_credits."""
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
+        version = _make_version(prog)
         kb = KnowledgeBlockFactory(
-            program=prog, required_credits=20, elective_credits=10
+            version=version, required_credits=20, elective_credits=10
         )
         assert kb.total_credits == 30
 
@@ -478,9 +502,10 @@ class TestKnowledgeBlockTree:
         """3-level deep tree structure."""
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
-        root = KnowledgeBlockFactory(program=prog, parent=None, name="L1")
-        child = KnowledgeBlockFactory(program=prog, parent=root, name="L2")
-        KnowledgeBlockFactory(program=prog, parent=child, name="L3")
+        version = _make_version(prog)
+        root = KnowledgeBlockFactory(version=version, parent=None, name="L1")
+        child = KnowledgeBlockFactory(version=version, parent=root, name="L2")
+        KnowledgeBlockFactory(version=version, parent=child, name="L3")
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/knowledge-blocks/"
@@ -540,8 +565,9 @@ class TestStatusBasedRestrictions:
         prog = TrainingProgramFactory(
             managing_department=dept, status=ProgramStatus.PUBLISHED
         )
-        po1 = ProgramObjectiveFactory(program=prog, code="PO1")
-        plo1 = ProgramLearningOutcomeFactory(program=prog, code="PLO1")
+        version = _make_version(prog)
+        po1 = ProgramObjectiveFactory(version=version, code="PO1")
+        plo1 = ProgramLearningOutcomeFactory(version=version, code="PLO1")
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/po-plo-matrix/"

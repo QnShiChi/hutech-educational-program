@@ -20,12 +20,18 @@ from hutech_program.programs.models import (
     ProgramStatus,
     SemesterPlan,
     TrainingProgram,
+    TrainingProgramVersion,
 )
 from hutech_program.rbac.models import Department
 
 pytestmark = pytest.mark.django_db
 
 PROGRAM_CODE = "NNTQ2025"
+
+
+def _get_version(program):
+    """Get the active version for a program."""
+    return program.versions.first()
 
 
 class TestSeedCommand:
@@ -44,28 +50,32 @@ class TestSeedCommand:
         # Department
         assert Department.objects.filter(code="KHOA_NN").exists()
 
+        # Version
+        version = _get_version(program)
+        assert version is not None
+
         # POs
-        pos = ProgramObjective.objects.filter(program=program)
+        pos = ProgramObjective.objects.filter(version=version)
         assert pos.count() == 4
 
         # PLOs
-        plos = ProgramLearningOutcome.objects.filter(program=program)
+        plos = ProgramLearningOutcome.objects.filter(version=version)
         assert plos.count() == 7
 
         # PO-PLO Mappings
-        mappings = PLOPOMapping.objects.filter(plo__program=program)
+        mappings = PLOPOMapping.objects.filter(plo__version=version)
         assert mappings.count() >= 7  # at least 1 per PLO
 
         # Knowledge Blocks
-        kbs = KnowledgeBlock.objects.filter(program=program)
+        kbs = KnowledgeBlock.objects.filter(version=version)
         assert kbs.count() >= 2  # at least root blocks
 
         # Courses
-        pcs = ProgramCourse.objects.filter(program=program)
+        pcs = ProgramCourse.objects.filter(version=version)
         assert pcs.count() >= 10  # should have many courses
 
         # PIs
-        pis = PerformanceIndicator.objects.filter(plo__program=program)
+        pis = PerformanceIndicator.objects.filter(plo__version=version)
         assert pis.count() == 16  # hardcoded
 
     def test_idempotent_skip_existing(self, capsys):
@@ -94,9 +104,10 @@ class TestSeedCommand:
         assert program.status == ProgramStatus.PUBLISHED
 
         # Verify data is intact (not doubled)
-        assert ProgramObjective.objects.filter(program=program).count() == 4
-        assert ProgramLearningOutcome.objects.filter(program=program).count() == 7
-        assert PerformanceIndicator.objects.filter(plo__program=program).count() == 16
+        version = _get_version(program)
+        assert ProgramObjective.objects.filter(version=version).count() == 4
+        assert ProgramLearningOutcome.objects.filter(version=version).count() == 7
+        assert PerformanceIndicator.objects.filter(plo__version=version).count() == 16
 
     def test_flush_twice_consistent(self):
         """Running with --flush multiple times gives consistent results."""
@@ -108,8 +119,9 @@ class TestSeedCommand:
         assert TrainingProgram.objects.filter(program_code=PROGRAM_CODE).count() == 1
 
         program = TrainingProgram.objects.get(program_code=PROGRAM_CODE)
-        assert ProgramObjective.objects.filter(program=program).count() == 4
-        assert ProgramLearningOutcome.objects.filter(program=program).count() == 7
+        version = _get_version(program)
+        assert ProgramObjective.objects.filter(version=version).count() == 4
+        assert ProgramLearningOutcome.objects.filter(version=version).count() == 7
 
     def test_department_not_duplicated(self):
         """Department uses get_or_create, should not be duplicated."""
@@ -131,7 +143,8 @@ class TestSeedCommand:
         """All POs have descriptions."""
         call_command("seed_nntq2025")
         program = TrainingProgram.objects.get(program_code=PROGRAM_CODE)
-        for po in ProgramObjective.objects.filter(program=program):
+        version = _get_version(program)
+        for po in ProgramObjective.objects.filter(version=version):
             assert po.description, f"{po.code} has no description"
             assert po.code.startswith("PO")
 
@@ -139,16 +152,18 @@ class TestSeedCommand:
         """All PLOs have competency levels set."""
         call_command("seed_nntq2025")
         program = TrainingProgram.objects.get(program_code=PROGRAM_CODE)
-        for plo in ProgramLearningOutcome.objects.filter(program=program):
+        version = _get_version(program)
+        for plo in ProgramLearningOutcome.objects.filter(version=version):
             assert plo.competency_level > 0, f"{plo.code} has no competency level"
 
     def test_plo_po_mapping_correctness(self):
         """PLO-PO mappings are bidirectional and correct."""
         call_command("seed_nntq2025")
         program = TrainingProgram.objects.get(program_code=PROGRAM_CODE)
+        version = _get_version(program)
 
         # PLO1 should map to PO1
-        plo1 = ProgramLearningOutcome.objects.get(program=program, code="PLO1")
+        plo1 = ProgramLearningOutcome.objects.get(version=version, code="PLO1")
         po_codes = list(
             PLOPOMapping.objects.filter(plo=plo1).values_list("po__code", flat=True)
         )

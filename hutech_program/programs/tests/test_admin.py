@@ -11,11 +11,12 @@ def admin_user(db):
 
 @pytest.fixture
 def setup_data(db, admin_user):
-    from .factories import TrainingProgramFactory, KnowledgeBlockFactory, CourseGroupFactory
+    from .factories import TrainingProgramFactory, TrainingProgramVersionFactory, KnowledgeBlockFactory, CourseGroupFactory
     
     tp = TrainingProgramFactory(status="DRAFT")
-    kb1 = KnowledgeBlockFactory(program=tp, name="KB 1")
-    kb2 = KnowledgeBlockFactory(program=tp, name="KB 2")
+    version = TrainingProgramVersionFactory(program=tp, academic_year="2024-2025")
+    kb1 = KnowledgeBlockFactory(version=version, name="KB 1")
+    kb2 = KnowledgeBlockFactory(version=version, name="KB 2")
     
     cg1 = CourseGroupFactory(knowledge_block=kb1, name="CG 1")
     cg2 = CourseGroupFactory(knowledge_block=kb1, name="CG 2")

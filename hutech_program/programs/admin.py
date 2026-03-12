@@ -16,6 +16,7 @@ from .models import (
     ProgramObjective,
     SemesterPlan,
     TrainingProgram,
+    TrainingProgramVersion,
 )
 
 
@@ -23,6 +24,7 @@ class ProgramContextMixin:
     change_list_template = "admin/programs/workflow_change_list.html"
     change_form_template = "admin/programs/workflow_change_form.html"
     program_relation_field = "program"
+    version_relation_field = None  # set to e.g. "version" for version-scoped models
 
     def get_active_program(self, request):
         program_id = request.session.get('active_program_id')
@@ -31,23 +33,44 @@ class ProgramContextMixin:
             return TrainingProgram.objects.filter(id=program_id).first()
         return None
 
+    def get_active_version(self, request):
+        """Get the active version from session, or fallback to latest version."""
+        version_id = request.session.get('active_version_id')
+        if version_id:
+            return TrainingProgramVersion.objects.filter(id=version_id).first()
+        # fallback: get latest version for active program
+        program = self.get_active_program(request)
+        if program:
+            return program.versions.order_by('-academic_year').first()
+        return None
+
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
         extra_context['active_program'] = self.get_active_program(request)
+        extra_context['active_version'] = self.get_active_version(request)
         return super().changelist_view(request, extra_context=extra_context)
 
     def change_view(self, request, object_id, form_url='', extra_context=None):
         extra_context = extra_context or {}
         extra_context['active_program'] = self.get_active_program(request)
+        extra_context['active_version'] = self.get_active_version(request)
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
 
     def add_view(self, request, form_url='', extra_context=None):
         extra_context = extra_context or {}
         extra_context['active_program'] = self.get_active_program(request)
+        extra_context['active_version'] = self.get_active_version(request)
         return super().add_view(request, form_url, extra_context=extra_context)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
+        # If this model is version-scoped, filter by version
+        if self.version_relation_field:
+            version = self.get_active_version(request)
+            if version:
+                qs = qs.filter(**{self.version_relation_field: version})
+            return qs
+        # Otherwise filter by program
         active_program = self.get_active_program(request)
         if active_program:
             qs = qs.filter(**{self.program_relation_field: active_program})
@@ -57,6 +80,10 @@ class ProgramContextMixin:
         active_program = self.get_active_program(request)
         if active_program and db_field.name == self.program_relation_field:
             kwargs["initial"] = active_program.id
+        # For version-scoped models, pre-fill version
+        active_version = self.get_active_version(request)
+        if active_version and db_field.name == 'version':
+            kwargs["initial"] = active_version.id
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
 
     def has_add_permission(self, request):
@@ -77,6 +104,14 @@ class ProgramContextMixin:
             return False
         return super().has_delete_permission(request, obj)
 
+
+
+class TrainingProgramVersionInline(admin.TabularInline):
+    model = TrainingProgramVersion
+    extra = 0
+    fields = ["academic_year", "status", "created_at"]
+    readonly_fields = ["created_at"]
+    show_change_link = True
 
 
 class ProgramObjectiveInline(admin.TabularInline):
@@ -107,7 +142,7 @@ class TrainingProgramAdmin(admin.ModelAdmin):
     ]
     list_filter = ["status", "education_level", "managing_department"]
     search_fields = ["program_code", "program_name_vi", "program_name_en"]
-    inlines = [ProgramObjectiveInline, PLOInline]
+    inlines = [TrainingProgramVersionInline]
     raw_id_fields = ["managing_department", "created_by", "last_modified_by"]
     readonly_fields = ["created_at", "updated_at"]
 
@@ -116,15 +151,32 @@ class TrainingProgramAdmin(admin.ModelAdmin):
         extra_context = extra_context or {}
         program = self.model.objects.filter(id=object_id).first()
         extra_context['active_program'] = program
+        # Also set the active version
+        if program:
+            version = program.versions.order_by('-academic_year').first()
+            if version:
+                request.session['active_version_id'] = str(version.id)
+                extra_context['active_version'] = version
         return super().change_view(request, object_id, form_url, extra_context=extra_context)
+
+
+@admin.register(TrainingProgramVersion)
+class TrainingProgramVersionAdmin(admin.ModelAdmin):
+    list_display = ["program", "academic_year", "status", "created_at"]
+    list_filter = ["status", "program"]
+    search_fields = ["program__program_code", "academic_year"]
+    raw_id_fields = ["program"]
+    readonly_fields = ["created_at", "updated_at"]
+    inlines = [ProgramObjectiveInline, PLOInline]
 
 
 @admin.register(ProgramObjective)
 class ProgramObjectiveAdmin(ProgramContextMixin, admin.ModelAdmin):
-    list_display = ["code", "program", "description", "order_index"]
-    list_filter = ["program"]
+    version_relation_field = "version"
+    list_display = ["code", "version", "description", "order_index"]
+    list_filter = ["version__program", "version"]
     search_fields = ["code", "description"]
-    raw_id_fields = ["program"]
+    raw_id_fields = ["version"]
 
 
 class PIInline(admin.TabularInline):
@@ -141,18 +193,19 @@ class PLOPOMappingInline(admin.TabularInline):
 
 @admin.register(ProgramLearningOutcome)
 class PLOAdmin(ProgramContextMixin, admin.ModelAdmin):
-    list_display = ["code", "program", "description", "competency_level", "order_index"]
-    list_filter = ["program"]
+    version_relation_field = "version"
+    list_display = ["code", "version", "description", "competency_level", "order_index"]
+    list_filter = ["version__program", "version"]
     search_fields = ["code", "description"]
-    raw_id_fields = ["program"]
+    raw_id_fields = ["version"]
     inlines = [PIInline, PLOPOMappingInline]
 
 
 @admin.register(PerformanceIndicator)
 class PIAdmin(ProgramContextMixin, admin.ModelAdmin):
-    program_relation_field = "plo__program"
+    version_relation_field = "plo__version"
     list_display = ["code", "plo", "description", "order_index"]
-    list_filter = ["plo__program"]
+    list_filter = ["plo__version__program", "plo__version"]
     search_fields = ["code", "description"]
     raw_id_fields = ["plo"]
 
@@ -277,23 +330,24 @@ class SemesterPlanAdmin(ProgramContextMixin, admin.ModelAdmin):
 
 @admin.register(CoursePLOContribution)
 class CoursePLOContributionAdmin(ProgramContextMixin, admin.ModelAdmin):
-    program_relation_field = "program_course__program"
+    version_relation_field = "program_course__version"
     list_display = ["program_course", "pi", "contribution_level"]
-    list_filter = ["contribution_level", "pi__plo__program"]
+    list_filter = ["contribution_level", "pi__plo__version__program"]
     raw_id_fields = ["program_course", "pi"]
 
 
 @admin.register(PLOAssessmentPlan)
 class PLOAssessmentPlanAdmin(ProgramContextMixin, admin.ModelAdmin):
+    version_relation_field = "version"
     list_display = [
-        "program",
+        "version",
         "pi",
         "direct_evidence",
         "assessment_tool",
         "expected_standard",
     ]
-    list_filter = ["program"]
+    list_filter = ["version__program", "version"]
     search_fields = ["pi__code", "direct_evidence", "assessment_tool"]
-    raw_id_fields = ["program", "pi", "sample_course"]
+    raw_id_fields = ["version", "pi", "sample_course"]
 
 

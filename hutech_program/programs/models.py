@@ -224,11 +224,19 @@ class TrainingProgramVersion(BaseModel):
 class ProgramObjective(BaseModel):
     """Mục tiêu đào tạo (PO)."""
 
-    program = models.ForeignKey(
-        TrainingProgram,
+    version = models.ForeignKey(
+        TrainingProgramVersion,
         on_delete=models.CASCADE,
         related_name="objectives",
-        verbose_name=_("Chương trình"),
+        verbose_name=_("Phiên bản CTĐT"),
+    )
+    program = models.ForeignKey(
+        TrainingProgram,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="objectives_legacy",
+        verbose_name=_("Chương trình (Legacy)"),
     )
     code = models.CharField(max_length=10, verbose_name=_("Mã PO"))
     description = models.TextField(verbose_name=_("Mô tả"))
@@ -237,21 +245,29 @@ class ProgramObjective(BaseModel):
     class Meta:
         verbose_name = _("Mục tiêu đào tạo (PO)")
         verbose_name_plural = _("Mục tiêu đào tạo (PO)")
-        unique_together = ["program", "code"]
+        unique_together = ["version", "code"]
         ordering = ["order_index"]
 
     def __str__(self) -> str:
-        return f"{self.program.program_code} / {self.code}"
+        return f"{self.version.program.program_code} / {self.code}"
 
 
 class ProgramLearningOutcome(BaseModel):
     """Chuẩn đầu ra (PLO)."""
 
-    program = models.ForeignKey(
-        TrainingProgram,
+    version = models.ForeignKey(
+        TrainingProgramVersion,
         on_delete=models.CASCADE,
         related_name="plos",
-        verbose_name=_("Chương trình"),
+        verbose_name=_("Phiên bản CTĐT"),
+    )
+    program = models.ForeignKey(
+        TrainingProgram,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="plos_legacy",
+        verbose_name=_("Chương trình (Legacy)"),
     )
     code = models.CharField(max_length=10, verbose_name=_("Mã PLO"))
     description = models.TextField(verbose_name=_("Mô tả"))
@@ -277,11 +293,11 @@ class ProgramLearningOutcome(BaseModel):
     class Meta:
         verbose_name = _("Chuẩn đầu ra (PLO)")
         verbose_name_plural = _("Chuẩn đầu ra (PLO)")
-        unique_together = ["program", "code"]
+        unique_together = ["version", "code"]
         ordering = ["order_index"]
 
     def __str__(self) -> str:
-        return f"{self.program.program_code} / {self.code}"
+        return f"{self.version.program.program_code} / {self.code}"
 
 
 class PLOPOMapping(models.Model):
@@ -722,11 +738,19 @@ class CoursePLOContribution(models.Model):
 class PLOAssessmentPlan(BaseModel):
     """Kế hoạch đánh giá PLO."""
 
-    program = models.ForeignKey(
-        TrainingProgram,
+    version = models.ForeignKey(
+        TrainingProgramVersion,
         on_delete=models.CASCADE,
         related_name="assessment_plans",
-        verbose_name=_("Chương trình"),
+        verbose_name=_("Phiên bản CTĐT"),
+    )
+    program = models.ForeignKey(
+        TrainingProgram,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assessment_plans_legacy",
+        verbose_name=_("Chương trình (Legacy)"),
     )
     pi = models.ForeignKey(
         PerformanceIndicator,
@@ -786,12 +810,13 @@ class PLOAssessmentPlan(BaseModel):
         verbose_name = _("Kế hoạch đánh giá PLO")
         verbose_name_plural = _("Kế hoạch đánh giá PLO")
         ordering = ["pi__plo__order_index", "pi__order_index"]
+        unique_together = ["version", "pi"]
         indexes = [
-            models.Index(fields=["program"]),
+            models.Index(fields=["version"]),
             models.Index(fields=["pi"]),
         ]
 
     def __str__(self) -> str:
-        return f"{self.program.program_code} / {self.pi.code} assessment"
+        return f"{self.version.program.program_code} / {self.pi.code} assessment"
 
 

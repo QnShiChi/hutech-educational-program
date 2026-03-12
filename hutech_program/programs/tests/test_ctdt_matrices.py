@@ -33,6 +33,7 @@ from .factories import (
     ProgramCourseFactory,
     ProgramLearningOutcomeFactory,
     TrainingProgramFactory,
+    TrainingProgramVersionFactory,
 )
 
 pytestmark = pytest.mark.django_db
@@ -56,17 +57,18 @@ def _setup_admin_user():
 
 
 def _setup_matrix_data(dept, n_courses=5, n_plos=3, pis_per_plo=2):
-    """Create a program with courses, PLOs, and PIs."""
+    """Create a program with version, courses, PLOs, and PIs."""
     prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
+    version = TrainingProgramVersionFactory(program=prog, academic_year="2024-2025")
     courses = []
     for i in range(n_courses):
-        pc = ProgramCourseFactory(program=prog)
+        pc = ProgramCourseFactory(version=version)
         courses.append(pc)
 
     plos = []
     pis = []
     for j in range(n_plos):
-        plo = ProgramLearningOutcomeFactory(program=prog, code=f"PLO{j}")
+        plo = ProgramLearningOutcomeFactory(version=version, code=f"PLO{j}")
         plos.append(plo)
         for k in range(pis_per_plo):
             pi = PerformanceIndicatorFactory(plo=plo, code=f"PI.{j}.{k}")
@@ -101,7 +103,7 @@ class TestCoursePLOMatrixBulkUpdate:
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["count"] == len(contributions)
         assert CoursePLOContribution.objects.filter(
-            program_course__program=prog
+            program_course__version__program=prog
         ).count() == len(contributions)
 
     def test_bulk_update_replaces_existing(self):
@@ -114,7 +116,7 @@ class TestCoursePLOMatrixBulkUpdate:
             program_course=courses[0], pi=pis[0], contribution_level=1
         )
         assert CoursePLOContribution.objects.filter(
-            program_course__program=prog
+            program_course__version__program=prog
         ).count() == 1
 
         # Update with new data
@@ -132,7 +134,7 @@ class TestCoursePLOMatrixBulkUpdate:
         assert resp.status_code == status.HTTP_200_OK
         # Old contribution should be deleted, only new one exists
         assert CoursePLOContribution.objects.filter(
-            program_course__program=prog
+            program_course__version__program=prog
         ).count() == 1
         contrib = CoursePLOContribution.objects.first()
         assert contrib.contribution_level == 3
@@ -304,9 +306,10 @@ class TestAssessmentPlanCRUD:
     def test_list_assessment_plans(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = TrainingProgramVersionFactory(program=prog, academic_year="2024-2025")
+        plo = ProgramLearningOutcomeFactory(version=version)
         pi = PerformanceIndicatorFactory(plo=plo)
-        PLOAssessmentPlanFactory(program=prog, pi=pi)
+        PLOAssessmentPlanFactory(version=version, pi=pi)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/assessment-plans/"
@@ -318,7 +321,8 @@ class TestAssessmentPlanCRUD:
     def test_create_assessment_plan(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = TrainingProgramVersionFactory(program=prog, academic_year="2024-2025")
+        plo = ProgramLearningOutcomeFactory(version=version)
         pi = PerformanceIndicatorFactory(plo=plo)
         client = _auth_client(user)
 
@@ -333,14 +337,15 @@ class TestAssessmentPlanCRUD:
         }
         resp = client.post(url, data, format="json")
         assert resp.status_code == status.HTTP_201_CREATED
-        assert PLOAssessmentPlan.objects.filter(program=prog, pi=pi).exists()
+        assert PLOAssessmentPlan.objects.filter(version=version, pi=pi).exists()
 
     def test_update_assessment_plan(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = TrainingProgramVersionFactory(program=prog, academic_year="2024-2025")
+        plo = ProgramLearningOutcomeFactory(version=version)
         pi = PerformanceIndicatorFactory(plo=plo)
-        plan = PLOAssessmentPlanFactory(program=prog, pi=pi)
+        plan = PLOAssessmentPlanFactory(version=version, pi=pi)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/assessment-plans/{plan.pk}/"
@@ -354,9 +359,10 @@ class TestAssessmentPlanCRUD:
     def test_delete_assessment_plan(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = TrainingProgramVersionFactory(program=prog, academic_year="2024-2025")
+        plo = ProgramLearningOutcomeFactory(version=version)
         pi = PerformanceIndicatorFactory(plo=plo)
-        plan = PLOAssessmentPlanFactory(program=prog, pi=pi)
+        plan = PLOAssessmentPlanFactory(version=version, pi=pi)
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/assessment-plans/{plan.pk}/"
@@ -367,7 +373,8 @@ class TestAssessmentPlanCRUD:
     def test_bulk_upsert_assessment_plans(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = TrainingProgramVersionFactory(program=prog, academic_year="2024-2025")
+        plo = ProgramLearningOutcomeFactory(version=version)
         pi1 = PerformanceIndicatorFactory(plo=plo, code="PI.1.1")
         pi2 = PerformanceIndicatorFactory(plo=plo, code="PI.1.2")
         client = _auth_client(user)
@@ -392,14 +399,15 @@ class TestAssessmentPlanCRUD:
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["created"] == 2
         assert resp.data["updated"] == 0
-        assert PLOAssessmentPlan.objects.filter(program=prog).count() == 2
+        assert PLOAssessmentPlan.objects.filter(version=version).count() == 2
 
     def test_bulk_upsert_updates_existing(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = TrainingProgramVersionFactory(program=prog, academic_year="2024-2025")
+        plo = ProgramLearningOutcomeFactory(version=version)
         pi = PerformanceIndicatorFactory(plo=plo)
-        PLOAssessmentPlanFactory(program=prog, pi=pi, direct_evidence="Old")
+        PLOAssessmentPlanFactory(version=version, pi=pi, direct_evidence="Old")
         client = _auth_client(user)
 
         url = f"/api/v1/programs/{prog.pk}/assessment-plans/bulk/"
@@ -415,13 +423,14 @@ class TestAssessmentPlanCRUD:
         assert resp.status_code == status.HTTP_200_OK
         assert resp.data["updated"] == 1
         assert resp.data["created"] == 0
-        plan = PLOAssessmentPlan.objects.get(program=prog, pi=pi)
+        plan = PLOAssessmentPlan.objects.get(version=version, pi=pi)
         assert plan.direct_evidence == "New evidence"
 
     def test_assessment_plan_with_sample_course(self):
         user, dept = _setup_admin_user()
         prog = TrainingProgramFactory(managing_department=dept, status=ProgramStatus.DRAFT)
-        plo = ProgramLearningOutcomeFactory(program=prog)
+        version = TrainingProgramVersionFactory(program=prog, academic_year="2024-2025")
+        plo = ProgramLearningOutcomeFactory(version=version)
         pi = PerformanceIndicatorFactory(plo=plo)
         sample = CourseFactory()
         client = _auth_client(user)

@@ -1,7 +1,7 @@
 import pytest
 from django.urls import reverse
-from hutech_program.programs.models import ProgramObjective, ProgramStatus
-from hutech_program.programs.tests.factories import TrainingProgramFactory
+from hutech_program.programs.models import ProgramObjective, ProgramStatus, TrainingProgramVersion, VersionStatus
+from hutech_program.programs.tests.factories import TrainingProgramFactory, TrainingProgramVersionFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -22,21 +22,22 @@ def test_admin_training_program_context_set(admin_client, admin_user):
     assert response.context_data["active_program"] == program
 
 def test_admin_po_changelist_filters_by_context(admin_client, admin_user):
-    """Test that POs list is filtered by active program context."""
+    """Test that POs list is filtered by active program context (version)."""
     p1 = TrainingProgramFactory(program_code="P1", status=ProgramStatus.DRAFT)
     p2 = TrainingProgramFactory(program_code="P2", status=ProgramStatus.DRAFT)
+    v1 = TrainingProgramVersionFactory(program=p1, academic_year="2024-2025")
+    v2 = TrainingProgramVersionFactory(program=p2, academic_year="2024-2025")
     
-    po1 = ProgramObjective.objects.create(code="PO1", program=p1, description="Desc")
-    po2 = ProgramObjective.objects.create(code="PO2", program=p2, description="Desc")
+    po1 = ProgramObjective.objects.create(code="PO1", version=v1, description="Desc")
+    po2 = ProgramObjective.objects.create(code="PO2", version=v2, description="Desc")
     
-    # Set context
+    # Set context by visiting the program change page
     admin_client.get(reverse("admin:programs_trainingprogram_change", args=[p1.id]))
     
     url = reverse("admin:programs_programobjective_changelist")
     response = admin_client.get(url)
     
     assert response.status_code == 200
-    # The active program should be p1
     assert response.context_data["active_program"] == p1
     
     # The queryset should only contain po1
@@ -49,7 +50,8 @@ def test_admin_po_readonly_when_parent_locked(admin_client, admin_user):
     """Test that child forms are read-only when parent is locked."""
     # Create locked program
     p1 = TrainingProgramFactory(program_code="P1", status="KHOA_APPROVED")
-    po1 = ProgramObjective.objects.create(code="PO1", program=p1, description="Desc")
+    v1 = TrainingProgramVersionFactory(program=p1, academic_year="2024-2025")
+    po1 = ProgramObjective.objects.create(code="PO1", version=v1, description="Desc")
     
     # Set context
     admin_client.get(reverse("admin:programs_trainingprogram_change", args=[p1.id]))
@@ -60,20 +62,21 @@ def test_admin_po_readonly_when_parent_locked(admin_client, admin_user):
     assert response.status_code == 200
     
     # Try to POST a change - should be forbidden because has_change_permission is False
-    data = {"code": "PO1-MOD", "description": "Mod", "program": p1.id}
+    data = {"code": "PO1-MOD", "description": "Mod", "version": v1.id}
     post_response = admin_client.post(url, data)
     assert post_response.status_code == 403
 
 def test_admin_po_editable_when_parent_draft(admin_client, admin_user):
     """Test that child forms are editable when parent is draft."""
     p1 = TrainingProgramFactory(program_code="P1", status=ProgramStatus.DRAFT)
-    po1 = ProgramObjective.objects.create(code="PO1", program=p1, description="Desc")
+    v1 = TrainingProgramVersionFactory(program=p1, academic_year="2024-2025")
+    po1 = ProgramObjective.objects.create(code="PO1", version=v1, description="Desc")
     
     # Set context
     admin_client.get(reverse("admin:programs_trainingprogram_change", args=[p1.id]))
     
     url = reverse("admin:programs_programobjective_change", args=[po1.id])
-    data = {"code": "PO1-MOD", "description": "Mod", "program": p1.id, "order_index": 1}
+    data = {"code": "PO1-MOD", "description": "Mod", "version": v1.id, "order_index": 1}
     post_response = admin_client.post(url, data)
     
     # Should redirect indicating success
